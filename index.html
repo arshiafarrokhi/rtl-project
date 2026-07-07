@@ -1,0 +1,2495 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="FixTxt is a standalone RTL/LTR text utility for fixing mixed-direction text.">
+  <title>FixTxt</title>
+  <script>
+    (function () {
+      var storedTheme = null;
+      try {
+        storedTheme = localStorage.getItem("fixtxt-theme");
+      } catch (error) {}
+      document.documentElement.dataset.theme = storedTheme === "light" ? "light" : "dark";
+    })();
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap');
+
+    :root {
+      color-scheme: dark;
+      --page-pad: 14px;
+      --page-gap: 12px;
+      --sidebar-width: 292px;
+      --bg: #080b10;
+      --bg-top: #111827;
+      --surface: rgba(16, 22, 31, 0.78);
+      --surface-strong: rgba(20, 28, 39, 0.92);
+      --surface-soft: rgba(255, 255, 255, 0.045);
+      --border: rgba(255, 255, 255, 0.13);
+      --border-strong: rgba(94, 234, 212, 0.42);
+      --text: #f5f7fb;
+      --muted: #aeb9c8;
+      --subtle: #7f8ba0;
+      --accent: #5eead4;
+      --accent-strong: #2dd4bf;
+      --accent-text: #042f2e;
+      --secondary: #fbbf24;
+      --danger: #fb7185;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+      --shadow-soft: 0 16px 36px rgba(0, 0, 0, 0.22);
+      --ring: 0 0 0 4px rgba(94, 234, 212, 0.22);
+      --radius-lg: 8px;
+      --radius-md: 8px;
+      --radius-sm: 8px;
+      --font: Vazirmatn, IRANSans, Yekan, Tahoma, Arial, sans-serif;
+    }
+
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f6f8f7;
+      --bg-top: #e9f6f3;
+      --surface: rgba(255, 255, 255, 0.83);
+      --surface-strong: rgba(255, 255, 255, 0.96);
+      --surface-soft: rgba(12, 20, 26, 0.045);
+      --border: rgba(17, 24, 39, 0.12);
+      --border-strong: rgba(13, 148, 136, 0.32);
+      --text: #121820;
+      --muted: #4b5563;
+      --subtle: #667085;
+      --accent: #0d9488;
+      --accent-strong: #0f766e;
+      --accent-text: #ecfeff;
+      --secondary: #b45309;
+      --danger: #be123c;
+      --shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+      --shadow-soft: 0 16px 36px rgba(15, 23, 42, 0.08);
+      --ring: 0 0 0 4px rgba(13, 148, 136, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      height: 100%;
+      min-height: 100%;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      overflow: hidden;
+      height: 100vh;
+      height: 100dvh;
+      min-height: 100vh;
+      min-height: 100dvh;
+      margin: 0;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        linear-gradient(135deg, rgba(94, 234, 212, 0.13), transparent 34%),
+        linear-gradient(225deg, rgba(251, 191, 36, 0.09), transparent 42%),
+        linear-gradient(150deg, var(--bg-top), var(--bg) 42%, var(--bg));
+      line-height: 1.6;
+      transition: background-color 180ms ease, color 180ms ease;
+    }
+
+    button,
+    textarea,
+    .rich-viewer,
+    .json-tree-view,
+    .markdown-viewer {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+    }
+
+    .page {
+      display: flex;
+      gap: var(--page-gap);
+      height: 100vh;
+      height: 100dvh;
+      min-height: 0;
+      width: 100%;
+      margin: 0;
+      padding: var(--page-pad) var(--page-pad) var(--page-pad) 0;
+    }
+
+    .app-header {
+      display: flex;
+      flex: 0 0 var(--sidebar-width);
+      min-height: 0;
+      flex-direction: column;
+      gap: 18px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-left: 0;
+      border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(22px);
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .mode-switch {
+      display: grid;
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+    }
+
+    .mode-button {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      min-height: 52px;
+      padding: 10px 11px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 800;
+      text-align: left;
+      transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+    }
+
+    .mode-button:hover {
+      color: var(--text);
+      background: var(--surface-soft);
+    }
+
+    .mode-button.is-active {
+      color: var(--text);
+      border-color: var(--border-strong);
+      background: color-mix(in srgb, var(--accent) 14%, var(--surface-strong));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .mode-icon {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 8px;
+      color: var(--accent);
+      background: var(--surface-soft);
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+
+    .mode-button.is-active .mode-icon {
+      color: var(--accent-text);
+      background: var(--accent);
+    }
+
+    .mode-button span:first-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .json-view-switch,
+    .markdown-align-switch {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 5px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--surface-soft) 58%, transparent);
+    }
+
+    .json-view-switch.is-visible,
+    .markdown-align-switch.is-visible {
+      display: grid;
+    }
+
+    .json-view-button,
+    .markdown-align-button {
+      min-height: 38px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      font-weight: 800;
+      transition: background-color 150ms ease, color 150ms ease;
+    }
+
+    .json-view-button:hover,
+    .json-view-button.is-active,
+    .markdown-align-button:hover,
+    .markdown-align-button.is-active {
+      color: var(--text);
+      background: var(--surface-soft);
+    }
+
+    .theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      width: 100%;
+      min-height: 48px;
+      margin-top: auto;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      background: var(--surface-soft);
+      cursor: pointer;
+      backdrop-filter: blur(16px);
+      transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease;
+    }
+
+    .theme-toggle:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+    }
+
+    .theme-toggle:focus-visible,
+    .mode-button:focus-visible,
+    .json-view-button:focus-visible,
+    .markdown-align-button:focus-visible,
+    .btn:focus-visible,
+    .tab-button:focus-visible,
+    .tab-close:focus-visible,
+    .tab-add:focus-visible,
+    textarea:focus-visible,
+    .json-tree-view:focus-visible,
+    .markdown-viewer:focus-visible {
+      outline: none;
+      box-shadow: var(--ring);
+    }
+
+    .theme-icon {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 9px;
+      color: var(--accent-text);
+      background: var(--accent);
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    h1,
+    h2,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 0;
+      font-size: 2.7rem;
+      line-height: 1;
+      letter-spacing: 0;
+      font-weight: 800;
+    }
+
+    .brand-link {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .brand-link:hover {
+      color: var(--accent);
+    }
+
+    .editor-card {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(22px);
+    }
+
+    .tabs-bar {
+      display: flex;
+      align-items: flex-end;
+      position: relative;
+      z-index: 1;
+      min-height: 46px;
+      padding: 10px 22px 0;
+    }
+
+    .tabs-scroll {
+      display: flex;
+      flex: 1;
+      align-items: flex-end;
+      gap: 2px;
+      min-width: 0;
+      overflow-x: auto;
+      margin-bottom: -1px;
+      padding: 0;
+      scrollbar-width: none;
+    }
+
+    .tabs-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab-item {
+      position: relative;
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      min-width: 0;
+      min-height: 38px;
+      overflow: hidden;
+      border: 1px solid transparent;
+      border-bottom: 0;
+      border-radius: 10px 10px 0 0;
+      background: transparent;
+      opacity: 0.72;
+      transition: background-color 140ms ease, opacity 140ms ease;
+    }
+
+    .tab-item.is-active {
+      z-index: 1;
+      border-color: color-mix(in srgb, var(--text) 18%, var(--border));
+      border-bottom-color: var(--surface-strong);
+      background: var(--surface-strong);
+      opacity: 1;
+    }
+
+    .tab-item.is-active::after {
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      height: 1px;
+      background: var(--surface-strong);
+      content: "";
+    }
+
+    .editor-card:focus-within .tab-item.is-active {
+      border-color: var(--border-strong);
+      border-bottom-color: var(--surface-strong);
+    }
+
+    .tab-item:hover {
+      background: var(--surface-soft);
+      opacity: 1;
+    }
+
+    .tab-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 92px;
+      max-width: 148px;
+      min-height: 38px;
+      padding: 7px 10px 7px 14px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.94rem;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .tab-item.is-active .tab-button {
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .tab-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tab-rename-input {
+      width: 116px;
+      min-height: 38px;
+      padding: 7px 10px 7px 14px;
+      border: 0;
+      color: var(--text);
+      background: transparent;
+      font: inherit;
+      font-size: 0.94rem;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .tab-rename-input:focus {
+      outline: none;
+    }
+
+    .tab-close {
+      display: inline-grid;
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      margin-inline-end: 5px;
+      place-items: center;
+      border-radius: 50%;
+      color: var(--subtle);
+      background: transparent;
+      cursor: pointer;
+      font-size: 17px;
+      line-height: 1;
+      transition: background-color 150ms ease, color 150ms ease;
+    }
+
+    .tab-close:hover {
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 14%, transparent);
+    }
+
+    .tab-close:disabled,
+    .tab-close:disabled:hover {
+      color: var(--subtle);
+      background: transparent;
+      cursor: not-allowed;
+      opacity: 0.34;
+    }
+
+    .tab-item.is-active .tab-close {
+      color: var(--subtle);
+      background: transparent;
+    }
+
+    .tab-item.is-active .tab-close:hover {
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 14%, transparent);
+    }
+
+    .tab-add {
+      display: inline-grid;
+      flex: 0 0 auto;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: 10px 10px 0 0;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      font-size: 23px;
+      font-weight: 700;
+      line-height: 1;
+      transition: background-color 140ms ease, color 140ms ease, opacity 140ms ease;
+    }
+
+    .tab-add:hover:not(:disabled) {
+      color: var(--text);
+      background: var(--surface-soft);
+    }
+
+    .tab-add:disabled {
+      cursor: not-allowed;
+      opacity: 0.32;
+    }
+
+    .textarea-wrap {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      position: relative;
+      z-index: 0;
+      overflow: hidden;
+      padding: 0 22px 0;
+    }
+
+    textarea,
+    .rich-viewer,
+    .json-tree-view,
+    .markdown-viewer {
+      display: block;
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 0 var(--radius-md) var(--radius-md) var(--radius-md);
+      color: var(--text);
+      background: var(--surface-strong);
+      caret-color: var(--accent);
+      resize: none;
+      direction: rtl;
+      text-align: right;
+      font-size: 19px;
+      line-height: 1.9;
+      white-space: pre-wrap;
+      unicode-bidi: plaintext;
+      overflow: auto;
+      overscroll-behavior: contain;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    textarea[hidden],
+    .rich-viewer[hidden],
+    .json-tree-view[hidden],
+    .markdown-viewer[hidden] {
+      display: none;
+    }
+
+    .rich-viewer,
+    .json-tree-view,
+    .markdown-viewer {
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+
+    .rich-viewer {
+      cursor: text;
+    }
+
+    .json-tree-view {
+      direction: ltr;
+      text-align: left;
+      font-family: Consolas, "SFMono-Regular", "Cascadia Mono", "Liberation Mono", Menlo, monospace;
+      font-size: 15px;
+      line-height: 1.65;
+      white-space: normal;
+    }
+
+    .markdown-viewer {
+      white-space: normal;
+    }
+
+    .markdown-viewer.is-align-right {
+      direction: rtl;
+      text-align: right;
+    }
+
+    .markdown-viewer.is-align-left {
+      direction: ltr;
+      text-align: left;
+    }
+
+    .markdown-empty {
+      color: var(--subtle);
+    }
+
+    .markdown-viewer h1,
+    .markdown-viewer h2,
+    .markdown-viewer h3,
+    .markdown-viewer h4,
+    .markdown-viewer h5,
+    .markdown-viewer h6 {
+      margin: 0.75em 0 0.35em;
+      color: var(--text);
+      line-height: 1.35;
+    }
+
+    .markdown-viewer h1 {
+      font-size: 1.75em;
+    }
+
+    .markdown-viewer h2 {
+      font-size: 1.45em;
+    }
+
+    .markdown-viewer h3 {
+      font-size: 1.22em;
+    }
+
+    .markdown-viewer p,
+    .markdown-viewer ul,
+    .markdown-viewer ol,
+    .markdown-viewer blockquote,
+    .markdown-viewer pre,
+    .markdown-viewer table {
+      margin: 0 0 0.9em;
+    }
+
+    .markdown-viewer ul,
+    .markdown-viewer ol {
+      padding-inline-start: 1.4em;
+    }
+
+    .markdown-viewer blockquote {
+      padding: 8px 14px;
+      border-inline-start: 3px solid var(--accent);
+      border-radius: 6px;
+      color: var(--muted);
+      background: var(--surface-soft);
+    }
+
+    .markdown-viewer pre,
+    .markdown-viewer code {
+      direction: inherit;
+      text-align: inherit;
+      unicode-bidi: plaintext;
+      font-family: Consolas, "SFMono-Regular", "Cascadia Mono", "Liberation Mono", Menlo, monospace;
+    }
+
+    .markdown-viewer pre code {
+      direction: inherit;
+      text-align: inherit;
+      unicode-bidi: inherit;
+    }
+
+    .markdown-viewer pre {
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.22);
+      font-size: 0.88em;
+      line-height: 1.65;
+    }
+
+    .markdown-viewer :not(pre) > code {
+      padding: 1px 6px;
+      border-radius: 5px;
+      background: color-mix(in srgb, var(--text) 11%, transparent);
+      font-size: 0.9em;
+    }
+
+    .markdown-viewer a {
+      color: var(--accent);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .markdown-viewer a:hover {
+      text-decoration: underline;
+    }
+
+    .markdown-viewer img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 0.5em 0 1em;
+      border-radius: 8px;
+    }
+
+    .markdown-viewer table {
+      width: 100%;
+      border-collapse: collapse;
+      direction: inherit;
+      text-align: inherit;
+      font-size: 0.92em;
+    }
+
+    .markdown-viewer th,
+    .markdown-viewer td {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .markdown-viewer th {
+      background: var(--surface-soft);
+      font-weight: 800;
+    }
+
+    .markdown-viewer hr {
+      height: 1px;
+      margin: 1.2em 0;
+      border: 0;
+      background: var(--border);
+    }
+
+    .json-tree-empty,
+    .json-tree-error,
+    .json-tree-limit {
+      color: var(--subtle);
+      font-family: var(--font);
+    }
+
+    .json-tree-error {
+      color: var(--danger);
+    }
+
+    .json-tree-node {
+      margin: 2px 0;
+    }
+
+    .json-tree-node details {
+      padding-inline-start: 14px;
+    }
+
+    .json-tree-node summary {
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 800;
+      outline: none;
+    }
+
+    .json-key {
+      color: color-mix(in srgb, var(--accent) 86%, #60a5fa);
+      font-weight: 800;
+    }
+
+    .json-string {
+      color: #fbbf24;
+    }
+
+    .json-number {
+      color: #93c5fd;
+    }
+
+    .json-boolean {
+      color: #c4b5fd;
+    }
+
+    .json-null {
+      color: var(--subtle);
+      font-style: italic;
+    }
+
+    .rich-viewer:empty::before {
+      color: var(--subtle);
+      opacity: 0.82;
+      content: attr(data-placeholder);
+    }
+
+    .rich-viewer:focus {
+      border-color: var(--border-strong);
+    }
+
+    .rich-viewer:focus-visible {
+      outline: none;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .rich-line {
+      min-height: 1.9em;
+    }
+
+    .rich-link,
+    .rich-code,
+    .rich-path {
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+
+    .rich-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: color-mix(in srgb, var(--accent) 84%, #60a5fa);
+      font-weight: 800;
+      text-decoration: none;
+      vertical-align: baseline;
+    }
+
+    .rich-link::before {
+      display: inline-grid;
+      width: 16px;
+      height: 16px;
+      place-items: center;
+      border: 1px solid currentColor;
+      border-radius: 4px;
+      font-size: 0.68em;
+      line-height: 1;
+      content: "\2197";
+      opacity: 0.9;
+    }
+
+    .rich-code,
+    .rich-path {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 5px;
+      color: var(--text);
+      background: color-mix(in srgb, var(--text) 11%, transparent);
+      font-family: Consolas, "SFMono-Regular", "Cascadia Mono", "Liberation Mono", Menlo, monospace;
+      font-size: 0.88em;
+      line-height: 1.55;
+    }
+
+    .rich-certainty {
+      display: inline-block;
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    textarea::placeholder {
+      color: var(--subtle);
+      opacity: 0.82;
+    }
+
+    textarea:focus {
+      border-color: var(--border-strong);
+    }
+
+    textarea:focus-visible {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    textarea.is-json-viewer {
+      font-family: Consolas, "SFMono-Regular", "Cascadia Mono", "Liberation Mono", Menlo, monospace;
+      font-size: 16px;
+      line-height: 1.75;
+      tab-size: 2;
+    }
+
+    .toolbar {
+      flex: 0 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 18px 22px 22px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      min-width: 0;
+      min-height: 44px;
+      padding: 10px 15px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      background: var(--surface-soft);
+      cursor: pointer;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-strong);
+      background: color-mix(in srgb, var(--accent) 13%, var(--surface-soft));
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary {
+      color: var(--accent-text);
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+      color: var(--accent-text);
+    }
+
+    .btn-danger {
+      color: var(--danger);
+    }
+
+    .btn-icon {
+      font-size: 1.05rem;
+      line-height: 1;
+    }
+
+    .toast {
+      position: fixed;
+      right: max(18px, env(safe-area-inset-right));
+      bottom: max(18px, env(safe-area-inset-bottom));
+      z-index: 10;
+      max-width: min(360px, calc(100vw - 32px));
+      padding: 13px 16px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      background: var(--surface-strong);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(14px);
+      transition: opacity 180ms ease, transform 180ms ease;
+      backdrop-filter: blur(18px);
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (min-width: 1440px) {
+      :root {
+        --page-pad: 18px;
+        --page-gap: 16px;
+        --sidebar-width: 320px;
+      }
+
+      .app-header {
+        padding: 30px;
+      }
+
+      textarea,
+      .rich-viewer,
+      .json-tree-view,
+      .markdown-viewer {
+        padding: 30px;
+        font-size: 20px;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      :root {
+        --sidebar-width: 252px;
+      }
+
+      .app-header {
+        padding: 20px;
+      }
+
+      h1 {
+        font-size: 2.35rem;
+      }
+
+      .mode-button,
+      .theme-toggle {
+        min-height: 48px;
+      }
+    }
+
+    @media (max-width: 920px) {
+      :root {
+        --page-pad: 12px;
+        --page-gap: 10px;
+      }
+
+      .page {
+        flex-direction: column;
+        width: 100%;
+        padding: var(--page-pad);
+      }
+
+      .app-header {
+        flex: 0 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+          "brand theme"
+          "modes modes";
+        align-items: center;
+        gap: 10px;
+        padding: 12px;
+        border-left: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+      }
+
+      .brand {
+        grid-area: brand;
+        min-width: 0;
+      }
+
+      .mode-switch {
+        grid-area: modes;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+        padding: 5px;
+      }
+
+      .mode-button {
+        min-height: 44px;
+        padding: 8px 10px;
+      }
+
+      .mode-icon {
+        width: 30px;
+        height: 30px;
+      }
+
+      .theme-toggle {
+        grid-area: theme;
+        width: 44px;
+        min-height: 44px;
+        margin-top: 0;
+        justify-content: center;
+        padding: 7px;
+      }
+
+      .theme-toggle span:last-child {
+        display: none;
+      }
+
+      h1 {
+        font-size: 2.05rem;
+      }
+
+      .editor-card {
+        flex: 1 1 auto;
+      }
+
+      .tabs-bar,
+      .textarea-wrap,
+      .toolbar {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .tab-button {
+        max-width: 112px;
+      }
+
+      .tab-rename-input {
+        width: 104px;
+      }
+
+      textarea,
+      .rich-viewer,
+      .json-tree-view,
+      .markdown-viewer {
+        min-height: 0;
+        padding: 18px;
+        font-size: 18px;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+        padding-top: 14px;
+        padding-bottom: 16px;
+      }
+
+      .btn {
+        min-width: 0;
+        padding-right: 10px;
+        padding-left: 10px;
+        overflow: hidden;
+        font-size: 0.86rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+    }
+
+    @media (max-width: 640px) {
+      :root {
+        --page-pad: 8px;
+        --page-gap: 8px;
+      }
+
+      .app-header {
+        grid-template-columns: minmax(0, 1fr) 42px;
+        gap: 8px;
+        padding: 9px;
+      }
+
+      .brand {
+        min-width: 0;
+      }
+
+      h1 {
+        font-size: 1.7rem;
+      }
+
+      .theme-toggle {
+        width: 42px;
+        min-height: 42px;
+        margin-top: 0;
+        padding: 6px;
+      }
+
+      .theme-icon {
+        width: 28px;
+        height: 28px;
+      }
+
+      .mode-switch {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 4px;
+        padding: 4px;
+      }
+
+      .mode-button {
+        min-height: 42px;
+        padding: 7px 8px;
+        font-size: 0.92rem;
+      }
+
+      .mode-icon {
+        width: 28px;
+        height: 28px;
+        font-size: 0.82rem;
+      }
+
+      .tabs-bar {
+        min-height: 44px;
+        padding: 8px 10px 0;
+      }
+
+      .tab-button {
+        min-width: 78px;
+        max-width: 118px;
+        min-height: 36px;
+        padding: 6px 9px 6px 11px;
+      }
+
+      .tab-rename-input {
+        width: 92px;
+      }
+
+      .tab-close {
+        width: 26px;
+        height: 26px;
+        margin-inline-end: 3px;
+      }
+
+      .tab-add {
+        width: 36px;
+        height: 36px;
+      }
+
+      .textarea-wrap {
+        padding-right: 10px;
+        padding-left: 10px;
+      }
+
+      textarea,
+      .rich-viewer,
+      .json-tree-view,
+      .markdown-viewer {
+        min-height: 0;
+        padding: 14px;
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
+        overflow: hidden;
+        padding: 8px 10px 10px;
+      }
+
+      .btn {
+        width: 100%;
+        min-width: 0;
+        min-height: 34px;
+        padding: 6px;
+        gap: 0;
+        border-radius: 7px;
+        font-size: 0.78rem;
+        line-height: 1.15;
+      }
+
+      .btn-icon {
+        font-size: 0.95rem;
+      }
+
+      .btn-text {
+        display: none;
+      }
+
+      .toast {
+        right: 8px;
+        bottom: 8px;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .mode-button span:first-child {
+        font-size: 0.74rem;
+      }
+
+      h1 {
+        font-size: 1.45rem;
+      }
+
+      .mode-button {
+        gap: 6px;
+        padding-right: 7px;
+        padding-left: 7px;
+      }
+
+      .mode-icon {
+        width: 26px;
+        height: 26px;
+        font-size: 0.74rem;
+      }
+
+      .tabs-bar {
+        padding-right: 8px;
+        padding-left: 8px;
+      }
+
+      .textarea-wrap {
+        padding-right: 8px;
+        padding-left: 8px;
+      }
+    }
+
+    @media (max-height: 620px) and (min-width: 921px) {
+      .app-header {
+        gap: 12px;
+        padding-top: 18px;
+        padding-bottom: 18px;
+      }
+
+      h1 {
+        font-size: 2.2rem;
+      }
+
+      .mode-button,
+      .theme-toggle {
+        min-height: 46px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="app-header">
+      <div class="brand">
+        <h1>
+          <a class="brand-link" href="https://github.com/arshiafarrokhi" target="_blank" rel="noopener noreferrer">FixTxt</a>
+        </h1>
+      </div>
+
+      <div class="mode-switch" aria-label="Viewer mode">
+        <button class="mode-button is-active" type="button" id="rtlViewerMode" aria-pressed="true">
+          <span>RTL Viewer</span>
+          <span class="mode-icon" aria-hidden="true">RTL</span>
+        </button>
+        <button class="mode-button" type="button" id="jsonViewer" aria-pressed="false">
+          <span>JSON Viewer</span>
+          <span class="mode-icon" aria-hidden="true">&#123;&#125;</span>
+        </button>
+        <button class="mode-button" type="button" id="markdownViewer" aria-pressed="false">
+          <span>Markdown</span>
+          <span class="mode-icon" aria-hidden="true">MD</span>
+        </button>
+      </div>
+
+      <div class="json-view-switch" id="jsonViewSwitch" aria-label="JSON view mode">
+        <button class="json-view-button is-active" type="button" id="jsonTextView" aria-pressed="true">Text</button>
+        <button class="json-view-button" type="button" id="jsonTreeView" aria-pressed="false">Tree</button>
+      </div>
+
+      <div class="markdown-align-switch" id="markdownAlignSwitch" aria-label="Markdown alignment">
+        <button class="markdown-align-button is-active" type="button" id="markdownAlignRight" aria-pressed="true">Right</button>
+        <button class="markdown-align-button" type="button" id="markdownAlignLeft" aria-pressed="false">Left</button>
+      </div>
+
+      <button class="theme-toggle" type="button" id="themeToggle" aria-label="Switch to light mode">
+        <span class="theme-icon" id="themeIcon" aria-hidden="true">&#9790;</span>
+        <span id="themeText">Dark mode</span>
+      </button>
+    </header>
+
+    <section class="editor-card" aria-label="Editor area">
+      <div class="tabs-bar" aria-label="Editor tabs">
+        <div class="tabs-scroll" id="tabList" role="tablist" aria-label="Open text tabs">
+          <button class="tab-add" type="button" id="addTab" aria-label="Add tab" title="Add tab">+</button>
+        </div>
+      </div>
+
+      <div class="textarea-wrap">
+        <textarea
+          id="textEditor"
+          dir="rtl"
+          spellcheck="false"
+          aria-label="Main text input"
+          placeholder="Paste Persian, Arabic, or mixed RTL/LTR text here..."></textarea>
+        <div
+          class="rich-viewer"
+          id="rtlRichViewer"
+          dir="rtl"
+          role="textbox"
+          tabindex="0"
+          aria-label="Readable RTL preview"
+          aria-readonly="true"
+          data-placeholder="Paste Persian, Arabic, Markdown, or mixed RTL/LTR text here..."
+          hidden></div>
+        <div
+          class="json-tree-view"
+          id="jsonTreeOutput"
+          dir="ltr"
+          role="region"
+          aria-label="JSON tree view"
+          hidden></div>
+        <div
+          class="markdown-viewer is-align-right"
+          id="markdownOutput"
+          dir="rtl"
+          role="region"
+          tabindex="0"
+          aria-label="Markdown viewer"
+          hidden></div>
+      </div>
+
+      <div class="toolbar" aria-label="Text actions">
+        <button class="btn btn-primary" type="button" id="fixRtl" title="Fix RTL Direction" aria-label="Fix RTL Direction">
+          <span class="btn-icon" aria-hidden="true">&#8610;</span>
+          <span class="btn-text">Fix RTL Direction</span>
+        </button>
+        <button class="btn" type="button" id="fixLtr" title="Fix LTR Direction" aria-label="Fix LTR Direction">
+          <span class="btn-icon" aria-hidden="true">&#8611;</span>
+          <span class="btn-text">Fix LTR Direction</span>
+        </button>
+        <button class="btn" type="button" id="pasteText" title="Paste" aria-label="Paste">
+          <span class="btn-icon" aria-hidden="true">&#128203;</span>
+          <span class="btn-text">Paste</span>
+        </button>
+        <button class="btn" type="button" id="copyText" title="Copy" aria-label="Copy">
+          <span class="btn-icon" aria-hidden="true">&#10697;</span>
+          <span class="btn-text">Copy</span>
+        </button>
+        <button class="btn btn-danger" type="button" id="clearAll" title="Clear All" aria-label="Clear All">
+          <span class="btn-icon" aria-hidden="true">&times;</span>
+          <span class="btn-text">Clear All</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">Copied to clipboard.</div>
+
+  <script>
+    var textarea = document.getElementById("textEditor");
+    var rtlRichViewer = document.getElementById("rtlRichViewer");
+    var jsonTreeOutput = document.getElementById("jsonTreeOutput");
+    var markdownOutput = document.getElementById("markdownOutput");
+    var tabList = document.getElementById("tabList");
+    var addTabButton = document.getElementById("addTab");
+    var rtlViewerButton = document.getElementById("rtlViewerMode");
+    var jsonViewerButton = document.getElementById("jsonViewer");
+    var markdownViewerButton = document.getElementById("markdownViewer");
+    var jsonViewSwitch = document.getElementById("jsonViewSwitch");
+    var jsonTextViewButton = document.getElementById("jsonTextView");
+    var jsonTreeViewButton = document.getElementById("jsonTreeView");
+    var markdownAlignSwitch = document.getElementById("markdownAlignSwitch");
+    var markdownAlignRightButton = document.getElementById("markdownAlignRight");
+    var markdownAlignLeftButton = document.getElementById("markdownAlignLeft");
+    var themeToggle = document.getElementById("themeToggle");
+    var themeIcon = document.getElementById("themeIcon");
+    var themeText = document.getElementById("themeText");
+    var toast = document.getElementById("toast");
+    var STORAGE_KEY = "fixtxt-workspaces-v2";
+    var LEGACY_TABS_KEY = "fixtxt-tabs-v1";
+    var MAX_TABS = 5;
+    var TREE_NODE_LIMIT = 1800;
+    var activeMode = "rtl";
+    var jsonView = "text";
+    var markdownAlign = "right";
+    var workspaces = {
+      rtl: createWorkspace("rtl"),
+      json: createWorkspace("json"),
+      markdown: createWorkspace("markdown")
+    };
+    var renamingTabId = null;
+    var editingRawRtl = false;
+    var saveTimer;
+    var toastTimer;
+
+    function createWorkspace(mode) {
+      var tab = createTab(1, mode);
+      return {
+        tabs: [tab],
+        activeTabId: tab.id
+      };
+    }
+
+    function getDefaultTabTitle(index) {
+      return "Tab " + index;
+    }
+
+    function createTab(index, mode) {
+      return {
+        id: "tab-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
+        title: getDefaultTabTitle(index),
+        customTitle: false,
+        text: "",
+        direction: mode === "json" ? "ltr" : "rtl"
+      };
+    }
+
+    function normalizeMode(mode) {
+      if (mode === "json" || mode === "markdown") {
+        return mode;
+      }
+      return "rtl";
+    }
+
+    function normalizeJsonView(view) {
+      return view === "tree" ? "tree" : "text";
+    }
+
+    function normalizeDirection(direction) {
+      return direction === "ltr" ? "ltr" : "rtl";
+    }
+
+    function normalizeMarkdownAlign(align) {
+      return align === "left" ? "left" : "right";
+    }
+
+    function normalizeText(text) {
+      return String(text || "")
+        .replace(/\r\n?/g, "\n")
+        .replace(/\u0000/g, "")
+        .replace(/\u00a0/g, " ");
+    }
+
+    function stripDirectionalControls(text) {
+      return normalizeText(text).replace(/[\u202A-\u202E\u2066-\u2069]/g, "");
+    }
+
+    function sanitizeText(text) {
+      return normalizeText(text);
+    }
+
+    function sanitizeIncomingText(text) {
+      return stripDirectionalControls(text);
+    }
+
+    function getWorkspace(mode) {
+      return workspaces[normalizeMode(mode || activeMode)];
+    }
+
+    function getActiveTab(mode) {
+      var workspace = getWorkspace(mode);
+      return workspace.tabs.find(function (tab) {
+        return tab.id === workspace.activeTabId;
+      }) || workspace.tabs[0];
+    }
+
+    function renumberTabs(mode) {
+      getWorkspace(mode).tabs.forEach(function (tab, index) {
+        if (!tab.customTitle) {
+          tab.title = getDefaultTabTitle(index + 1);
+        }
+      });
+    }
+
+    function saveNow() {
+      window.clearTimeout(saveTimer);
+      writeActiveTabFromEditor(false);
+
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          version: 2,
+          activeMode: activeMode,
+          jsonView: jsonView,
+          markdownAlign: markdownAlign,
+          workspaces: workspaces
+        }));
+      } catch (error) {}
+    }
+
+    function queueSave() {
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(saveNow, 160);
+    }
+
+    function writeActiveTabFromEditor(shouldQueue) {
+      var tab = getActiveTab();
+      if (!tab) {
+        return;
+      }
+
+      tab.text = sanitizeText(textarea.value);
+      tab.direction = activeMode === "json" ? "ltr" : activeMode === "markdown" ? (markdownAlign === "left" ? "ltr" : "rtl") : normalizeDirection(textarea.dir);
+
+      if (shouldQueue) {
+        queueSave();
+      }
+    }
+
+    function normalizeStoredTab(tab, index, mode) {
+      var fallback = createTab(index + 1, mode);
+      var storedTitle = typeof tab.title === "string" ? tab.title.trim() : "";
+      var customTitle = Boolean(tab.customTitle) || Boolean(storedTitle && !/^Tab \d+$/.test(storedTitle));
+      return {
+        id: typeof tab.id === "string" && tab.id ? tab.id : fallback.id,
+        title: customTitle ? storedTitle.slice(0, 32) : fallback.title,
+        customTitle: customTitle,
+        text: typeof tab.text === "string" ? sanitizeText(tab.text) : "",
+        direction: mode === "json" ? "ltr" : normalizeDirection(tab.direction)
+      };
+    }
+
+    function normalizeStoredWorkspace(rawWorkspace, mode) {
+      var workspace = createWorkspace(mode);
+      if (!rawWorkspace || !Array.isArray(rawWorkspace.tabs)) {
+        return workspace;
+      }
+
+      workspace.tabs = rawWorkspace.tabs.slice(0, MAX_TABS).map(function (tab, index) {
+        return normalizeStoredTab(tab, index, mode);
+      });
+
+      if (!workspace.tabs.length) {
+        workspace.tabs = [createTab(1, mode)];
+      }
+
+      workspace.activeTabId = workspace.tabs.some(function (tab) {
+        return tab.id === rawWorkspace.activeTabId;
+      }) ? rawWorkspace.activeTabId : workspace.tabs[0].id;
+
+      return workspace;
+    }
+
+    function migrateLegacyTabs() {
+      var legacy = null;
+      try {
+        legacy = JSON.parse(localStorage.getItem(LEGACY_TABS_KEY) || "null");
+      } catch (error) {}
+
+      if (!legacy || !Array.isArray(legacy.tabs)) {
+        return false;
+      }
+
+      var rtlTabs = [];
+      var jsonTabs = [];
+      legacy.tabs.slice(0, MAX_TABS).forEach(function (tab, index) {
+        var mode = tab && tab.jsonMode ? "json" : "rtl";
+        var normalized = normalizeStoredTab(tab || {}, mode === "json" ? jsonTabs.length : rtlTabs.length, mode);
+        if (mode === "json") {
+          jsonTabs.push(normalized);
+        } else {
+          rtlTabs.push(normalized);
+        }
+      });
+
+      if (rtlTabs.length) {
+        workspaces.rtl.tabs = rtlTabs;
+        workspaces.rtl.activeTabId = rtlTabs[0].id;
+      }
+
+      if (jsonTabs.length) {
+        workspaces.json.tabs = jsonTabs;
+        workspaces.json.activeTabId = jsonTabs[0].id;
+      }
+
+      var legacyActive = legacy.tabs.find(function (tab) {
+        return tab.id === legacy.activeTabId;
+      });
+      activeMode = legacyActive && legacyActive.jsonMode ? "json" : "rtl";
+      return true;
+    }
+
+    function loadStoredState() {
+      var stored = null;
+      try {
+        stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      } catch (error) {}
+
+      if (stored && stored.workspaces) {
+        activeMode = normalizeMode(stored.activeMode);
+        jsonView = normalizeJsonView(stored.jsonView);
+        markdownAlign = normalizeMarkdownAlign(stored.markdownAlign);
+        workspaces.rtl = normalizeStoredWorkspace(stored.workspaces.rtl, "rtl");
+        workspaces.json = normalizeStoredWorkspace(stored.workspaces.json, "json");
+        workspaces.markdown = normalizeStoredWorkspace(stored.workspaces.markdown, "markdown");
+        renumberTabs("rtl");
+        renumberTabs("json");
+        renumberTabs("markdown");
+        return;
+      }
+
+      if (migrateLegacyTabs()) {
+        renumberTabs("rtl");
+        renumberTabs("json");
+        renumberTabs("markdown");
+      }
+    }
+
+    function hasReadableMarkdown(text) {
+      return /\[[^\]\n]{1,160}\]\([^) \n][^)\n]{1,500}\)/.test(text);
+    }
+
+    function escapeAttribute(text) {
+      return escapeHtml(text).replace(/'/g, "&#39;");
+    }
+
+    function getSafeHref(url) {
+      var value = String(url || "").trim();
+      if (/^(https?:|mailto:|tel:)/i.test(value) || /^[./#]/.test(value)) {
+        return value;
+      }
+      return "";
+    }
+
+    function renderInlineMarkdown(text) {
+      var html = "";
+      var pattern = /`([^`\n]+)`|!\[([^\]\n]{0,160})\]\(([^)\n]{1,500})\)|\[([^\]\n]{1,160})\]\(([^)\n]{1,500})\)|(\*\*|__)(.+?)\6|(\*|_)([^*_]+?)\8|~~(.+?)~~/g;
+      var lastIndex = 0;
+      var match;
+
+      while ((match = pattern.exec(text))) {
+        html += escapeHtml(text.slice(lastIndex, match.index));
+        if (match[1] != null) {
+          html += '<span class="rich-code">' + escapeHtml(match[1]) + '</span>';
+        } else if (match[2] != null) {
+          var src = getSafeHref(match[3]);
+          html += src
+            ? '<img src="' + escapeAttribute(src) + '" alt="' + escapeAttribute(match[2]) + '">'
+            : '<span class="rich-code">' + escapeHtml(match[2] || "image") + '</span>';
+        } else if (match[4] != null) {
+          var href = getSafeHref(match[5]);
+          html += href
+            ? '<a class="rich-link" href="' + escapeAttribute(href) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(match[4]) + '</a>'
+            : '<span class="rich-link" title="' + escapeAttribute(match[5]) + '">' + escapeHtml(match[4]) + '</span>';
+        } else if (match[7] != null) {
+          html += '<strong>' + renderInlineMarkdown(match[7]) + '</strong>';
+        } else if (match[9] != null) {
+          html += '<em>' + renderInlineMarkdown(match[9]) + '</em>';
+        } else if (match[10] != null) {
+          html += '<s>' + renderInlineMarkdown(match[10]) + '</s>';
+        } else {
+          html += escapeHtml(match[0]);
+        }
+        lastIndex = pattern.lastIndex;
+      }
+
+      html += escapeHtml(text.slice(lastIndex));
+      return html;
+    }
+
+    function renderRtlPreview() {
+      var text = textarea.value;
+      rtlRichViewer.innerHTML = text.split("\n").map(function (line) {
+        return '<div class="rich-line">' + renderInlineMarkdown(line) + '</div>';
+      }).join("");
+    }
+
+    function isMarkdownTableSeparator(line) {
+      return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+    }
+
+    function splitMarkdownTableRow(line) {
+      return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(function (cell) {
+        return cell.trim();
+      });
+    }
+
+    function renderMarkdownTable(lines, startIndex) {
+      var headers = splitMarkdownTableRow(lines[startIndex]);
+      var rows = [];
+      var index = startIndex + 2;
+
+      while (index < lines.length && /\|/.test(lines[index]) && lines[index].trim()) {
+        rows.push(splitMarkdownTableRow(lines[index]));
+        index += 1;
+      }
+
+      var html = "<table><thead><tr>" + headers.map(function (cell) {
+        return "<th>" + renderInlineMarkdown(cell) + "</th>";
+      }).join("") + "</tr></thead><tbody>" + rows.map(function (row) {
+        return "<tr>" + headers.map(function (_, cellIndex) {
+          return "<td>" + renderInlineMarkdown(row[cellIndex] || "") + "</td>";
+        }).join("") + "</tr>";
+      }).join("") + "</tbody></table>";
+
+      return { html: html, nextIndex: index };
+    }
+
+    function renderMarkdownDocument(markdown) {
+      var lines = sanitizeText(markdown).split("\n");
+      var html = "";
+      var index = 0;
+
+      while (index < lines.length) {
+        var line = lines[index];
+        var trimmed = line.trim();
+
+        if (!trimmed) {
+          index += 1;
+          continue;
+        }
+
+        var fence = trimmed.match(/^```(.*)$/);
+        if (fence) {
+          var codeLines = [];
+          index += 1;
+          while (index < lines.length && !/^```/.test(lines[index].trim())) {
+            codeLines.push(lines[index]);
+            index += 1;
+          }
+          if (index < lines.length) {
+            index += 1;
+          }
+          html += "<pre><code>" + escapeHtml(codeLines.join("\n")) + "</code></pre>";
+          continue;
+        }
+
+        if (index + 1 < lines.length && /\|/.test(line) && isMarkdownTableSeparator(lines[index + 1])) {
+          var table = renderMarkdownTable(lines, index);
+          html += table.html;
+          index = table.nextIndex;
+          continue;
+        }
+
+        if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+          html += "<hr>";
+          index += 1;
+          continue;
+        }
+
+        var heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+        if (heading) {
+          var level = heading[1].length;
+          html += "<h" + level + ">" + renderInlineMarkdown(heading[2]) + "</h" + level + ">";
+          index += 1;
+          continue;
+        }
+
+        if (/^>\s?/.test(trimmed)) {
+          var quoteLines = [];
+          while (index < lines.length && /^>\s?/.test(lines[index].trim())) {
+            quoteLines.push(lines[index].trim().replace(/^>\s?/, ""));
+            index += 1;
+          }
+          html += "<blockquote>" + renderMarkdownDocument(quoteLines.join("\n")) + "</blockquote>";
+          continue;
+        }
+
+        if (/^\s*[-*+]\s+/.test(line)) {
+          html += "<ul>";
+          while (index < lines.length && /^\s*[-*+]\s+/.test(lines[index])) {
+            html += "<li>" + renderInlineMarkdown(lines[index].replace(/^\s*[-*+]\s+/, "")) + "</li>";
+            index += 1;
+          }
+          html += "</ul>";
+          continue;
+        }
+
+        if (/^\s*\d+\.\s+/.test(line)) {
+          html += "<ol>";
+          while (index < lines.length && /^\s*\d+\.\s+/.test(lines[index])) {
+            html += "<li>" + renderInlineMarkdown(lines[index].replace(/^\s*\d+\.\s+/, "")) + "</li>";
+            index += 1;
+          }
+          html += "</ol>";
+          continue;
+        }
+
+        var paragraph = [trimmed];
+        index += 1;
+        while (
+          index < lines.length &&
+          lines[index].trim() &&
+          !/^```/.test(lines[index].trim()) &&
+          !/^(#{1,6})\s+/.test(lines[index].trim()) &&
+          !/^>\s?/.test(lines[index].trim()) &&
+          !/^\s*[-*+]\s+/.test(lines[index]) &&
+          !/^\s*\d+\.\s+/.test(lines[index]) &&
+          !/^(-{3,}|\*{3,}|_{3,})$/.test(lines[index].trim())
+        ) {
+          paragraph.push(lines[index].trim());
+          index += 1;
+        }
+        html += "<p>" + renderInlineMarkdown(paragraph.join(" ")) + "</p>";
+      }
+
+      return html || '<div class="markdown-empty">Paste Markdown to preview it here.</div>';
+    }
+
+    function renderMarkdownViewer() {
+      var isLeft = markdownAlign === "left";
+      markdownOutput.dir = isLeft ? "ltr" : "rtl";
+      markdownOutput.classList.toggle("is-align-left", isLeft);
+      markdownOutput.classList.toggle("is-align-right", !isLeft);
+      markdownOutput.innerHTML = textarea.value.trim()
+        ? renderMarkdownDocument(textarea.value)
+        : '<div class="markdown-empty">Paste Markdown to preview it here.</div>';
+    }
+
+    function setEditorDirection(direction) {
+      textarea.dir = direction;
+      textarea.style.direction = direction;
+      textarea.style.textAlign = direction === "rtl" ? "right" : "left";
+    }
+
+    function updateModeUI() {
+      var isJson = activeMode === "json";
+      var isMarkdown = activeMode === "markdown";
+      var isTree = isJson && jsonView === "tree";
+
+      rtlViewerButton.classList.toggle("is-active", activeMode === "rtl");
+      rtlViewerButton.setAttribute("aria-pressed", activeMode === "rtl" ? "true" : "false");
+      jsonViewerButton.classList.toggle("is-active", isJson);
+      jsonViewerButton.setAttribute("aria-pressed", isJson ? "true" : "false");
+      markdownViewerButton.classList.toggle("is-active", isMarkdown);
+      markdownViewerButton.setAttribute("aria-pressed", isMarkdown ? "true" : "false");
+      jsonViewSwitch.classList.toggle("is-visible", isJson);
+      markdownAlignSwitch.classList.toggle("is-visible", isMarkdown);
+      jsonTextViewButton.classList.toggle("is-active", isJson && jsonView === "text");
+      jsonTextViewButton.setAttribute("aria-pressed", isJson && jsonView === "text" ? "true" : "false");
+      jsonTreeViewButton.classList.toggle("is-active", isTree);
+      jsonTreeViewButton.setAttribute("aria-pressed", isTree ? "true" : "false");
+      markdownAlignRightButton.classList.toggle("is-active", isMarkdown && markdownAlign === "right");
+      markdownAlignRightButton.setAttribute("aria-pressed", isMarkdown && markdownAlign === "right" ? "true" : "false");
+      markdownAlignLeftButton.classList.toggle("is-active", isMarkdown && markdownAlign === "left");
+      markdownAlignLeftButton.setAttribute("aria-pressed", isMarkdown && markdownAlign === "left" ? "true" : "false");
+      textarea.classList.toggle("is-json-viewer", isJson);
+      textarea.hidden = isTree || isMarkdown;
+      jsonTreeOutput.hidden = !isTree;
+      markdownOutput.hidden = !isMarkdown;
+
+      if (isJson) {
+        setEditorDirection("ltr");
+        textarea.placeholder = "Paste raw JSON here...";
+      } else if (isMarkdown) {
+        setEditorDirection(markdownAlign === "left" ? "ltr" : "rtl");
+        textarea.placeholder = "Paste Markdown here...";
+      } else {
+        setEditorDirection(getActiveTab("rtl").direction || "rtl");
+        textarea.placeholder = "Paste Persian, Arabic, Markdown, or mixed RTL/LTR text here...";
+      }
+    }
+
+    function renderTabs() {
+      var workspace = getWorkspace();
+      while (tabList.firstChild) {
+        tabList.removeChild(tabList.firstChild);
+      }
+
+      workspace.tabs.forEach(function (tab) {
+        var isActive = tab.id === workspace.activeTabId;
+        var item = document.createElement("div");
+        var closeButton = document.createElement("button");
+        item.className = isActive ? "tab-item is-active" : "tab-item";
+
+        if (renamingTabId === tab.id) {
+          var renameInput = document.createElement("input");
+          renameInput.className = "tab-rename-input";
+          renameInput.type = "text";
+          renameInput.value = tab.title;
+          renameInput.maxLength = 32;
+          renameInput.setAttribute("aria-label", "Rename " + tab.title);
+          renameInput.addEventListener("click", function (event) { event.stopPropagation(); });
+          renameInput.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              finishRenamingTab(tab.id, renameInput.value);
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancelRenamingTab();
+            }
+          });
+          renameInput.addEventListener("blur", function () {
+            finishRenamingTab(tab.id, renameInput.value);
+          });
+          item.appendChild(renameInput);
+          window.requestAnimationFrame(function () {
+            renameInput.focus();
+            renameInput.select();
+          });
+        } else {
+          var tabButton = document.createElement("button");
+          var tabLabel = document.createElement("span");
+          tabButton.className = "tab-button";
+          tabButton.type = "button";
+          tabButton.id = "tabButton-" + tab.id;
+          tabButton.setAttribute("role", "tab");
+          tabButton.setAttribute("aria-selected", isActive ? "true" : "false");
+          tabButton.setAttribute("aria-controls", "textEditor");
+          tabButton.title = tab.title + " - double click to rename";
+          tabButton.addEventListener("click", function () { switchTab(tab.id); });
+          tabButton.addEventListener("dblclick", function (event) {
+            event.preventDefault();
+            startRenamingTab(tab.id);
+          });
+          tabLabel.className = "tab-label";
+          tabLabel.textContent = tab.title;
+          tabButton.appendChild(tabLabel);
+          item.appendChild(tabButton);
+        }
+
+        closeButton.className = "tab-close";
+        closeButton.type = "button";
+        closeButton.disabled = workspace.tabs.length === 1;
+        closeButton.setAttribute("aria-label", closeButton.disabled ? "Close tab disabled" : "Close " + tab.title);
+        closeButton.title = closeButton.disabled ? "At least one tab must stay open" : "Close tab";
+        closeButton.textContent = "\u00d7";
+        closeButton.addEventListener("click", function (event) {
+          event.stopPropagation();
+          closeTab(tab.id);
+        });
+        item.appendChild(closeButton);
+        tabList.appendChild(item);
+      });
+
+      tabList.appendChild(addTabButton);
+      addTabButton.disabled = workspace.tabs.length >= MAX_TABS;
+      addTabButton.title = addTabButton.disabled ? "Maximum 5 tabs" : "Add tab";
+      addTabButton.setAttribute("aria-disabled", addTabButton.disabled ? "true" : "false");
+    }
+
+    function renderCurrentView() {
+      updateModeUI();
+      if (activeMode === "json" && jsonView === "tree") {
+        rtlRichViewer.hidden = true;
+        rtlRichViewer.innerHTML = "";
+        markdownOutput.hidden = true;
+        markdownOutput.innerHTML = "";
+        renderJsonTree();
+      } else if (activeMode === "markdown") {
+        rtlRichViewer.hidden = true;
+        rtlRichViewer.innerHTML = "";
+        jsonTreeOutput.hidden = true;
+        jsonTreeOutput.innerHTML = "";
+        textarea.hidden = true;
+        renderMarkdownViewer();
+        markdownOutput.hidden = false;
+      } else if (activeMode === "rtl" && !editingRawRtl && hasReadableMarkdown(textarea.value)) {
+        jsonTreeOutput.hidden = true;
+        jsonTreeOutput.innerHTML = "";
+        markdownOutput.hidden = true;
+        markdownOutput.innerHTML = "";
+        textarea.hidden = true;
+        renderRtlPreview();
+        rtlRichViewer.hidden = false;
+      } else {
+        rtlRichViewer.hidden = true;
+        rtlRichViewer.innerHTML = "";
+        markdownOutput.hidden = true;
+        markdownOutput.innerHTML = "";
+        jsonTreeOutput.innerHTML = "";
+      }
+    }
+
+    function loadActiveTab(focusEditor) {
+      var tab = getActiveTab();
+      if (!tab) {
+        return;
+      }
+      textarea.value = tab.text;
+      setEditorDirection(activeMode === "json" ? "ltr" : activeMode === "markdown" ? (markdownAlign === "left" ? "ltr" : "rtl") : tab.direction);
+      editingRawRtl = activeMode === "rtl" && focusEditor && !hasReadableMarkdown(tab.text);
+      renderCurrentView();
+      if (focusEditor) {
+        focusEditorAtStart();
+      }
+    }
+
+    function addNewTab() {
+      var workspace = getWorkspace();
+      if (workspace.tabs.length >= MAX_TABS) {
+        showToast("Maximum 5 tabs reached.");
+        return;
+      }
+      writeActiveTabFromEditor(false);
+      var activeIndex = workspace.tabs.findIndex(function (tab) { return tab.id === workspace.activeTabId; });
+      var insertIndex = activeIndex >= 0 ? activeIndex + 1 : workspace.tabs.length;
+      var newTab = createTab(workspace.tabs.length + 1, activeMode);
+      workspace.tabs.splice(insertIndex, 0, newTab);
+      workspace.activeTabId = newTab.id;
+      renumberTabs(activeMode);
+      renderTabs();
+      loadActiveTab(true);
+      saveNow();
+    }
+
+    function closeTab(tabId) {
+      var workspace = getWorkspace();
+      var index = workspace.tabs.findIndex(function (tab) { return tab.id === tabId; });
+      if (index === -1 || workspace.tabs.length === 1) {
+        return;
+      }
+      writeActiveTabFromEditor(false);
+      var closingActive = tabId === workspace.activeTabId;
+      workspace.tabs.splice(index, 1);
+      renumberTabs(activeMode);
+      if (closingActive) {
+        workspace.activeTabId = workspace.tabs[Math.min(index, workspace.tabs.length - 1)].id;
+      }
+      renderTabs();
+      if (closingActive) {
+        loadActiveTab(true);
+      }
+      saveNow();
+    }
+
+    function switchTab(tabId) {
+      var workspace = getWorkspace();
+      if (tabId === workspace.activeTabId) {
+        return;
+      }
+      if (!workspace.tabs.some(function (tab) { return tab.id === tabId; })) {
+        return;
+      }
+      writeActiveTabFromEditor(false);
+      workspace.activeTabId = tabId;
+      renderTabs();
+      loadActiveTab(true);
+      saveNow();
+    }
+
+    function startRenamingTab(tabId) {
+      var workspace = getWorkspace();
+      if (!workspace.tabs.some(function (tab) { return tab.id === tabId; })) {
+        return;
+      }
+      writeActiveTabFromEditor(false);
+      renamingTabId = tabId;
+      renderTabs();
+    }
+
+    function finishRenamingTab(tabId, title) {
+      if (renamingTabId !== tabId) {
+        return;
+      }
+      var workspace = getWorkspace();
+      var tabIndex = workspace.tabs.findIndex(function (tab) { return tab.id === tabId; });
+      if (tabIndex === -1) {
+        renamingTabId = null;
+        renderTabs();
+        return;
+      }
+      var fallbackTitle = getDefaultTabTitle(tabIndex + 1);
+      var nextTitle = title.trim().replace(/\s+/g, " ").slice(0, 32) || fallbackTitle;
+      workspace.tabs[tabIndex].title = nextTitle;
+      workspace.tabs[tabIndex].customTitle = nextTitle !== fallbackTitle;
+      renamingTabId = null;
+      renderTabs();
+      saveNow();
+    }
+
+    function cancelRenamingTab() {
+      renamingTabId = null;
+      renderTabs();
+    }
+
+    function switchMode(mode) {
+      mode = normalizeMode(mode);
+      if (mode === activeMode) {
+        return;
+      }
+      writeActiveTabFromEditor(false);
+      activeMode = mode;
+      renamingTabId = null;
+      editingRawRtl = false;
+      renderTabs();
+      loadActiveTab(true);
+      saveNow();
+    }
+
+    function setJsonView(view) {
+      editingRawRtl = false;
+      jsonView = normalizeJsonView(view);
+      renderCurrentView();
+      saveNow();
+    }
+
+    function setMarkdownAlign(align) {
+      markdownAlign = normalizeMarkdownAlign(align);
+      setEditorDirection(markdownAlign === "left" ? "ltr" : "rtl");
+      renderCurrentView();
+      saveNow();
+    }
+
+    function clearFormatting(text) {
+      return stripDirectionalControls(text);
+    }
+
+    function toRTL(text) {
+      return clearFormatting(text)
+        .split("\n")
+        .map(function (line) { return "\u202B" + line + "\u202C"; })
+        .join("\n");
+    }
+
+    function toLTR(text) {
+      return clearFormatting(text)
+        .split("\n")
+        .map(function (line) { return "\u202A" + line + "\u202C"; })
+        .join("\n");
+    }
+
+    function formatJsonText(text) {
+      var cleaned = sanitizeIncomingText(text).trim();
+      if (!cleaned) {
+        return "";
+      }
+      return JSON.stringify(JSON.parse(cleaned), null, 2);
+    }
+
+    function scheduleJsonFormat(showInvalidToast) {
+      window.setTimeout(function () {
+        if (activeMode !== "json") {
+          return;
+        }
+        try {
+          textarea.value = formatJsonText(textarea.value);
+          writeActiveTabFromEditor(false);
+          renderCurrentView();
+          saveNow();
+        } catch (error) {
+          writeActiveTabFromEditor(true);
+          if (showInvalidToast) {
+            showToast("Invalid JSON.");
+          }
+        }
+      }, 0);
+    }
+
+    function insertRawText(text) {
+      var raw = sanitizeIncomingText(text);
+      if (!raw) {
+        return;
+      }
+
+      if (textarea.hidden) {
+        var current = textarea.value;
+        textarea.value = current ? current + "\n" + raw : raw;
+      } else {
+        var start = textarea.selectionStart == null ? textarea.value.length : textarea.selectionStart;
+        var end = textarea.selectionEnd == null ? textarea.value.length : textarea.selectionEnd;
+        textarea.setRangeText(raw, start, end, "end");
+      }
+
+      writeActiveTabFromEditor(false);
+      if (activeMode === "json") {
+        scheduleJsonFormat(true);
+      } else {
+        editingRawRtl = false;
+        queueSave();
+      }
+      renderCurrentView();
+    }
+
+    function getRawText() {
+      writeActiveTabFromEditor(false);
+      return getActiveTab().text;
+    }
+
+    function copyRawText() {
+      var text = getRawText();
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(function () {
+          showToast("Copied raw text.");
+        }).catch(function () {
+          fallbackCopyText(text);
+        });
+        return;
+      }
+      fallbackCopyText(text);
+    }
+
+    function fallbackCopyText(text) {
+      var previous = textarea.value;
+      var wasHidden = textarea.hidden;
+      textarea.hidden = false;
+      textarea.value = text;
+      textarea.select();
+      document.execCommand("copy");
+      textarea.value = previous;
+      textarea.hidden = wasHidden;
+      renderCurrentView();
+      showToast("Copied raw text.");
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function renderJsonValue(value, key, depth, counter) {
+      if (counter.count >= TREE_NODE_LIMIT) {
+        counter.limited = true;
+        return "";
+      }
+      counter.count += 1;
+
+      var label = key == null ? "" : '<span class="json-key">' + escapeHtml(key) + '</span>: ';
+      if (value === null) {
+        return '<div class="json-tree-node">' + label + '<span class="json-null">null</span></div>';
+      }
+      if (Array.isArray(value)) {
+        var children = "";
+        for (var index = 0; index < value.length && counter.count < TREE_NODE_LIMIT; index += 1) {
+          children += renderJsonValue(value[index], String(index), depth + 1, counter);
+        }
+        if (index < value.length) {
+          counter.limited = true;
+        }
+        return '<div class="json-tree-node"><details open><summary>' + label + 'Array(' + value.length + ')</summary>' + children + '</details></div>';
+      }
+      if (typeof value === "object") {
+        var keys = Object.keys(value);
+        var objectChildren = "";
+        for (var keyIndex = 0; keyIndex < keys.length && counter.count < TREE_NODE_LIMIT; keyIndex += 1) {
+          var childKey = keys[keyIndex];
+          objectChildren += renderJsonValue(value[childKey], childKey, depth + 1, counter);
+        }
+        if (keyIndex < keys.length) {
+          counter.limited = true;
+        }
+        return '<div class="json-tree-node"><details open><summary>' + label + 'Object{' + keys.length + '}</summary>' + objectChildren + '</details></div>';
+      }
+      if (typeof value === "string") {
+        return '<div class="json-tree-node">' + label + '<span class="json-string">"' + escapeHtml(value) + '"</span></div>';
+      }
+      if (typeof value === "number") {
+        return '<div class="json-tree-node">' + label + '<span class="json-number">' + value + '</span></div>';
+      }
+      if (typeof value === "boolean") {
+        return '<div class="json-tree-node">' + label + '<span class="json-boolean">' + value + '</span></div>';
+      }
+      return '<div class="json-tree-node">' + label + escapeHtml(String(value)) + '</div>';
+    }
+
+    function renderJsonTree() {
+      var text = sanitizeText(textarea.value).trim();
+      if (!text) {
+        jsonTreeOutput.innerHTML = '<div class="json-tree-empty">Paste JSON to see the tree view.</div>';
+        return;
+      }
+      try {
+        var value = JSON.parse(text);
+        var counter = { count: 0, limited: false };
+        var html = renderJsonValue(value, null, 0, counter);
+        if (counter.limited) {
+          html += '<div class="json-tree-limit">Tree preview stopped after ' + TREE_NODE_LIMIT + ' nodes.</div>';
+        }
+        jsonTreeOutput.innerHTML = html;
+      } catch (error) {
+        jsonTreeOutput.innerHTML = '<div class="json-tree-error">Invalid JSON: ' + escapeHtml(error.message) + '</div>';
+      }
+    }
+
+    function focusVisibleEditor() {
+      if (!textarea.hidden) {
+        try { textarea.focus({ preventScroll: true }); } catch (error) { textarea.focus(); }
+        return;
+      }
+      if (!rtlRichViewer.hidden) {
+        try { rtlRichViewer.focus({ preventScroll: true }); } catch (error) { rtlRichViewer.focus(); }
+        return;
+      }
+      if (!markdownOutput.hidden) {
+        try { markdownOutput.focus({ preventScroll: true }); } catch (error) { markdownOutput.focus(); }
+        return;
+      }
+      try { jsonTreeOutput.focus({ preventScroll: true }); } catch (error) { jsonTreeOutput.focus(); }
+    }
+
+    function focusEditorAtStart() {
+      if (!textarea.hidden) {
+        try { textarea.focus({ preventScroll: true }); } catch (error) { textarea.focus(); }
+        textarea.setSelectionRange(0, 0);
+        textarea.scrollTop = 0;
+        return;
+      }
+      if (!rtlRichViewer.hidden) {
+        try { rtlRichViewer.focus({ preventScroll: true }); } catch (error) { rtlRichViewer.focus(); }
+        rtlRichViewer.scrollTop = 0;
+        return;
+      }
+      if (!markdownOutput.hidden) {
+        try { markdownOutput.focus({ preventScroll: true }); } catch (error) { markdownOutput.focus(); }
+        markdownOutput.scrollTop = 0;
+        return;
+      }
+      try { jsonTreeOutput.focus({ preventScroll: true }); } catch (error) { jsonTreeOutput.focus(); }
+      jsonTreeOutput.scrollTop = 0;
+    }
+
+    function applyText(value, direction) {
+      textarea.value = sanitizeText(value);
+      setEditorDirection(direction);
+      writeActiveTabFromEditor(false);
+      renderCurrentView();
+      saveNow();
+      focusEditorAtStart();
+    }
+
+    function showToast(message) {
+      window.clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.add("is-visible");
+      toastTimer = window.setTimeout(function () {
+        toast.classList.remove("is-visible");
+      }, 2200);
+    }
+
+    function updateThemeControl(theme) {
+      var isDark = theme === "dark";
+      themeIcon.textContent = isDark ? "\u263e" : "\u2600";
+      themeText.textContent = isDark ? "Dark mode" : "Light mode";
+      themeToggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+    }
+
+    function setTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      try { localStorage.setItem("fixtxt-theme", theme); } catch (error) {}
+      updateThemeControl(theme);
+    }
+
+    rtlViewerButton.addEventListener("click", function () { switchMode("rtl"); });
+    jsonViewerButton.addEventListener("click", function () { switchMode("json"); });
+    markdownViewerButton.addEventListener("click", function () { switchMode("markdown"); });
+    jsonTextViewButton.addEventListener("click", function () { setJsonView("text"); });
+    jsonTreeViewButton.addEventListener("click", function () { setJsonView("tree"); });
+    markdownAlignRightButton.addEventListener("click", function () { setMarkdownAlign("right"); });
+    markdownAlignLeftButton.addEventListener("click", function () { setMarkdownAlign("left"); });
+
+    document.getElementById("fixRtl").addEventListener("click", function () {
+      if (activeMode !== "rtl") {
+        showToast("RTL actions are only for RTL Viewer.");
+        return;
+      }
+      applyText(toRTL(textarea.value), "rtl");
+    });
+
+    document.getElementById("fixLtr").addEventListener("click", function () {
+      if (activeMode !== "rtl") {
+        showToast("RTL actions are only for RTL Viewer.");
+        return;
+      }
+      applyText(toLTR(textarea.value), "ltr");
+    });
+
+    document.getElementById("clearAll").addEventListener("click", function () {
+      textarea.value = "";
+      writeActiveTabFromEditor(false);
+      renderCurrentView();
+      saveNow();
+    });
+
+    document.getElementById("pasteText").addEventListener("click", function () {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(function (text) {
+          insertRawText(text);
+          if (activeMode !== "json") {
+            showToast("Pasted raw text.");
+          }
+        }).catch(function () {
+          focusVisibleEditor();
+          showToast("Clipboard permission was blocked. Press Ctrl+V here.");
+        });
+        return;
+      }
+      focusVisibleEditor();
+      showToast("Press Ctrl+V to paste here.");
+    });
+
+    document.getElementById("copyText").addEventListener("click", copyRawText);
+    addTabButton.addEventListener("click", addNewTab);
+
+    textarea.addEventListener("input", function () {
+      editingRawRtl = activeMode === "rtl";
+      textarea.value = sanitizeText(textarea.value);
+      writeActiveTabFromEditor(true);
+      if (activeMode === "json" && jsonView === "tree") {
+        renderJsonTree();
+      }
+    });
+
+    textarea.addEventListener("paste", function (event) {
+      var text = event.clipboardData ? event.clipboardData.getData("text/plain") : "";
+      event.preventDefault();
+      insertRawText(text);
+    });
+
+    textarea.addEventListener("blur", function () {
+      if (activeMode === "rtl") {
+        editingRawRtl = false;
+        renderCurrentView();
+      }
+    });
+
+    rtlRichViewer.addEventListener("paste", function (event) {
+      var text = event.clipboardData ? event.clipboardData.getData("text/plain") : "";
+      event.preventDefault();
+      insertRawText(text);
+    });
+
+    rtlRichViewer.addEventListener("copy", function (event) {
+      if (event.clipboardData) {
+        event.preventDefault();
+        event.clipboardData.setData("text/plain", getRawText());
+        showToast("Copied raw text.");
+      }
+    });
+
+    markdownOutput.addEventListener("paste", function (event) {
+      var text = event.clipboardData ? event.clipboardData.getData("text/plain") : "";
+      event.preventDefault();
+      insertRawText(text);
+    });
+
+    markdownOutput.addEventListener("copy", function (event) {
+      if (event.clipboardData) {
+        event.preventDefault();
+        event.clipboardData.setData("text/plain", getRawText());
+        showToast("Copied raw text.");
+      }
+    });
+
+    jsonTreeOutput.addEventListener("paste", function (event) {
+      var text = event.clipboardData ? event.clipboardData.getData("text/plain") : "";
+      event.preventDefault();
+      insertRawText(text);
+    });
+
+    jsonTreeOutput.addEventListener("copy", function (event) {
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", getRawText());
+      showToast("Copied raw text.");
+    });
+
+    themeToggle.addEventListener("click", function () {
+      var currentTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+      setTheme(currentTheme === "dark" ? "light" : "dark");
+    });
+
+    window.addEventListener("beforeunload", saveNow);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") {
+        saveNow();
+      }
+    });
+
+    updateThemeControl(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+    loadStoredState();
+    renderTabs();
+    loadActiveTab(false);
+    saveNow();
+  </script>
+</body>
+</html>
+
