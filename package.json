@@ -1,0 +1,14 @@
+{
+  "name": "fixtxt",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write index.html styles.css theme-init.js storage.js app.js playwright.config.js tests/*.{js,mjs}",
+    "format:check": "prettier --check index.html styles.css theme-init.js storage.js app.js playwright.config.js tests/*.{js,mjs}",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "prettier": "^3.9.5"
+  }
+}
