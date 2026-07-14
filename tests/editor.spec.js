@@ -529,6 +529,62 @@ test("theme preference survives reload", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
+test("Graphite Chrome palette stays consistent in dark and light themes", async ({
+  page,
+}) => {
+  await openCleanApp(page);
+
+  const readPalette = () =>
+    page.evaluate(() => {
+      const styles = getComputedStyle(document.documentElement);
+      return {
+        accent: styles.getPropertyValue("--accent").trim(),
+        accentControl: styles.getPropertyValue("--accent-control").trim(),
+        border: styles.getPropertyValue("--border").trim(),
+        canvas: styles.getPropertyValue("--canvas").trim(),
+        panel: styles.getPropertyValue("--panel").trim(),
+        panelStrong: styles.getPropertyValue("--panel-strong").trim(),
+        rail: styles.getPropertyValue("--rail").trim(),
+        subtle: styles.getPropertyValue("--subtle").trim(),
+      };
+    });
+
+  await expect.poll(readPalette).toEqual({
+    accent: "#63a4ff",
+    accentControl: "#2b5cab",
+    border: "#303a49",
+    canvas: "#07090d",
+    panel: "#171c24",
+    panelStrong: "#11161d",
+    rail: "#10141a",
+    subtle: "#738196",
+  });
+  await expect(page.locator("#previewView")).toHaveCSS(
+    "background-color",
+    "rgb(43, 92, 171)",
+  );
+  await expect(page.locator("#previewView")).toHaveCSS(
+    "color",
+    "rgb(255, 255, 255)",
+  );
+
+  await page.locator("#themeToggle").click();
+  await expect.poll(readPalette).toEqual({
+    accent: "#1f6feb",
+    accentControl: "#1f6feb",
+    border: "#d0d8e3",
+    canvas: "#e9edf2",
+    panel: "#ffffff",
+    panelStrong: "#f6f8fb",
+    rail: "#f8fafc",
+    subtle: "#697586",
+  });
+  await expect(page.locator("#previewView")).toHaveCSS(
+    "background-color",
+    "rgb(31, 111, 235)",
+  );
+});
+
 test("mobile layout keeps the action bar on one row without page overflow", async ({
   page,
 }, testInfo) => {

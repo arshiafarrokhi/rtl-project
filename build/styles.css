@@ -9,21 +9,22 @@
   --font: Vazirmatn, IRANSans, Yekan, Tahoma, Arial, sans-serif;
   --mono:
     "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --canvas: #080c12;
-  --rail: #0b1119;
-  --panel: #101721;
-  --panel-soft: #151d28;
-  --panel-strong: #0d131c;
-  --border: #25303d;
-  --border-strong: #344252;
-  --text: #eef3f8;
+  --canvas: #07090d;
+  --rail: #10141a;
+  --panel: #171c24;
+  --panel-soft: #202733;
+  --panel-strong: #11161d;
+  --border: #303a49;
+  --border-strong: #46566b;
+  --text: #f3f6fa;
   --muted: #9aa7b8;
-  --subtle: #687689;
-  --accent: #58d8cc;
-  --accent-strong: #41c8bb;
-  --accent-soft: rgba(88, 216, 204, 0.12);
-  --accent-line: rgba(88, 216, 204, 0.62);
-  --accent-text: #061412;
+  --subtle: #738196;
+  --accent: #63a4ff;
+  --accent-strong: #3b82f6;
+  --accent-control: #2b5cab;
+  --accent-soft: rgba(99, 164, 255, 0.14);
+  --accent-line: rgba(99, 164, 255, 0.62);
+  --accent-text: #ffffff;
   --danger: #ff667f;
   --danger-soft: rgba(255, 102, 127, 0.1);
   --radius: 6px;
@@ -31,20 +32,21 @@
 
 [data-theme="light"] {
   color-scheme: light;
-  --canvas: #e7ebef;
-  --rail: #f7f9fb;
+  --canvas: #e9edf2;
+  --rail: #f8fafc;
   --panel: #ffffff;
-  --panel-soft: #f2f5f7;
-  --panel-strong: #fbfcfd;
-  --border: #d3dae2;
-  --border-strong: #aab7c4;
-  --text: #18212b;
-  --muted: #5d6977;
-  --subtle: #84909d;
-  --accent: #16a89c;
-  --accent-strong: #0b9187;
-  --accent-soft: rgba(22, 168, 156, 0.1);
-  --accent-line: rgba(11, 145, 135, 0.62);
+  --panel-soft: #edf3fa;
+  --panel-strong: #f6f8fb;
+  --border: #d0d8e3;
+  --border-strong: #9cabbc;
+  --text: #17202b;
+  --muted: #5e6978;
+  --subtle: #697586;
+  --accent: #1f6feb;
+  --accent-strong: #1558c0;
+  --accent-control: #1f6feb;
+  --accent-soft: rgba(31, 111, 235, 0.1);
+  --accent-line: rgba(31, 111, 235, 0.6);
   --accent-text: #ffffff;
   --danger: #d93656;
   --danger-soft: rgba(217, 54, 86, 0.08);
@@ -474,8 +476,8 @@ button {
 .editor-view-button.is-active,
 .json-view-button.is-active,
 .markdown-align-button.is-active {
-  color: var(--accent);
-  background: var(--panel-soft);
+  color: var(--accent-text);
+  background: var(--accent-control);
   box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 
