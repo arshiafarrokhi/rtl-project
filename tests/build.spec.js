@@ -1,3 +1,4 @@
+const { readFile } = require("node:fs/promises");
 const { resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { test, expect } = require("@playwright/test");
@@ -34,6 +35,14 @@ test("offline build opens from index.html and persists text", async ({
     true,
   );
   expect(storageState.settings).not.toContain(rawText);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator("#downloadText").click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  expect(download.suggestedFilename()).toBe("Tab 1.txt");
+  expect(downloadPath).not.toBeNull();
+  expect(await readFile(downloadPath, "utf8")).toBe(rawText);
 
   await page.reload({ waitUntil: "load" });
   await expect(page.locator("body")).toHaveAttribute("data-ready", "true");

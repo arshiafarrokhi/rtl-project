@@ -1,3 +1,4 @@
+const { readFile } = require("node:fs/promises");
 const { test, expect } = require("@playwright/test");
 
 async function openCleanApp(page) {
@@ -206,19 +207,25 @@ test("Preview edits preserve Markdown source and stay in Preview", async ({
   );
 
   const fontSizes = await page.evaluate(() => ({
+    previewFamily: getComputedStyle(rtlRichViewer).fontFamily,
     preview: Number.parseFloat(getComputedStyle(rtlRichViewer).fontSize),
+    sourceFamily: getComputedStyle(textEditor).fontFamily,
     source: Number.parseFloat(getComputedStyle(textEditor).fontSize),
   }));
   expect(fontSizes.preview).toBeGreaterThanOrEqual(18);
   expect(fontSizes.source).toBeGreaterThanOrEqual(18);
+  expect(fontSizes.previewFamily).toContain("Vazirmatn");
+  expect(fontSizes.sourceFamily).toContain("Vazirmatn");
 
   await page.locator("#jsonViewer").click();
   const jsonFontSizes = await page.evaluate(() => ({
+    sourceFamily: getComputedStyle(textEditor).fontFamily,
     source: Number.parseFloat(getComputedStyle(textEditor).fontSize),
     tree: Number.parseFloat(getComputedStyle(jsonTreeOutput).fontSize),
   }));
   expect(jsonFontSizes.source).toBeGreaterThanOrEqual(16);
   expect(jsonFontSizes.tree).toBeGreaterThanOrEqual(15);
+  expect(jsonFontSizes.sourceFamily).toContain("Cascadia Code");
 });
 
 test("plain-text paste and preview copy preserve the complete raw source", async ({
@@ -242,6 +249,81 @@ test("plain-text paste and preview copy preserve the complete raw source", async
     return transfer.getData("text/plain");
   });
   expect(copied).toBe(raw);
+});
+
+test("toolbar copy and paste replace the selected Preview without changing raw bidi text", async ({
+  context,
+  page,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await openCleanApp(page);
+
+  const raw = [
+    "\u202Bاجرای محلی FixTxt\u202C",
+    "\u202B[قطعی] فقط شباهت ظاهری معیار نبود؛ عملکرد ورودی، ذخیره‌سازی و خروجی آفلاین نیز حفظ شده‌اند.\u202C",
+    "\u202BI've finished building. Let me know if I can tighten anything up or build out more functionality.\u202C",
+    "\u202B[قطعی] گزینه ۲ با ریل باریک، تب‌های Chrome مانند، workspace یکپارچه و navigation موبایل پیاده شد.\u202C",
+    "\u202B[قطعی] آیکون‌ها با Phosphor جایگزین و خروجی \n**build/index.html** به‌روز شد.\u202C",
+    "\u202B[قطعی] نتیجه تست‌ها: ۲۳ موفق و یک skip مورد انتظار برای تست مختص موبایل.\u202C",
+    "\u202B[قطعی] مقایسه تصویری دسکتاپ و موبایل در \n**design-qa.md** ثبت شده است.\u202C",
+  ].join("\n");
+
+  await page.evaluate((text) => navigator.clipboard.writeText(text), raw);
+  await page.locator("#pasteText").click();
+  await expect(page.locator("#textEditor")).toHaveValue(raw);
+  const initialMarkup = await page.locator("#rtlRichViewer").innerHTML();
+
+  await page.locator("#rtlRichViewer").focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.locator("#copyText").click();
+  await expect
+    .poll(async () =>
+      (await page.evaluate(() => navigator.clipboard.readText())).replace(
+        /\r\n?/g,
+        "\n",
+      ),
+    )
+    .toBe(raw);
+  await page.locator("#pasteText").click();
+
+  await expect(page.locator("#textEditor")).toHaveValue(raw);
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
+  expect(await page.locator("#rtlRichViewer").innerHTML()).toBe(initialMarkup);
+  expect(
+    (await page.evaluate(() => navigator.clipboard.readText())).replace(
+      /\r\n?/g,
+      "\n",
+    ),
+  ).toBe(raw);
+});
+
+test("RTL Viewer downloads the exact raw text from the active tab", async ({
+  page,
+}) => {
+  await openCleanApp(page);
+  await showSource(page);
+  await page.locator("#textEditor").fill("first tab");
+
+  await page.locator("#addTab").click();
+  await showSource(page);
+  const raw = "\u202Bمتن خام تب دوم\u202C\nLine  2 with double spaces";
+  await page.locator("#textEditor").fill(raw);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator("#downloadText").click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+
+  expect(download.suggestedFilename()).toBe("Tab 2.txt");
+  expect(downloadPath).not.toBeNull();
+  expect(await readFile(downloadPath, "utf8")).toBe(raw);
+
+  await page.locator("#jsonViewer").click();
+  await expect(page.locator("#downloadText")).toBeHidden();
+  await page.locator("#markdownViewer").click();
+  await expect(page.locator("#downloadText")).toBeHidden();
+  await page.locator("#rtlViewerMode").click();
+  await expect(page.locator("#downloadText")).toBeVisible();
 });
 
 test("RTL, JSON, and Markdown keep independent tabs and source text", async ({
@@ -485,4 +567,16 @@ test("mobile layout keeps the action bar on one row without page overflow", asyn
   expect(smallLayout.bodyHasVerticalScroll).toBe(false);
   expect(smallLayout.labelsAreClipped).toBe(false);
   expect(smallLayout.toolbarHasHorizontalScroll).toBe(false);
+
+  await page.setViewportSize({ width: 1110, height: 720 });
+  const breakpointLayout = await page.evaluate(() => {
+    const toolbar = document.querySelector(".toolbar");
+    const buttons = Array.from(toolbar.querySelectorAll(".btn:not([hidden])"));
+    return {
+      rows: new Set(buttons.map((button) => Math.round(button.offsetTop))).size,
+      toolbarHasHorizontalScroll: toolbar.scrollWidth > toolbar.clientWidth,
+    };
+  });
+  expect(breakpointLayout.toolbarHasHorizontalScroll).toBe(false);
+  expect(breakpointLayout.rows).toBe(1);
 });

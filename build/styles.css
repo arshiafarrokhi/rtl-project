@@ -6,7 +6,7 @@
 
 :root {
   color-scheme: dark;
-  --font: Inter, "Segoe UI", Tahoma, Arial, sans-serif;
+  --font: Vazirmatn, IRANSans, Yekan, Tahoma, Arial, sans-serif;
   --mono:
     "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --canvas: #080c12;
@@ -518,7 +518,7 @@ textarea,
 textarea {
   direction: rtl;
   text-align: right;
-  font-family: var(--mono);
+  font-family: var(--font);
   white-space: pre-wrap;
   tab-size: 2;
 }
@@ -529,6 +529,7 @@ textarea::placeholder {
 }
 
 textarea.is-json-viewer {
+  font-family: var(--mono);
   font-size: 17px;
   line-height: 1.7;
 }
@@ -896,6 +897,13 @@ textarea.without-line-numbers {
   font-size: 19px;
 }
 
+#downloadText {
+  width: min(160px, 100%);
+  border-left: 1px solid var(--border);
+  grid-column: 3;
+  justify-self: end;
+}
+
 #pasteText {
   grid-column: 4;
 }
@@ -959,9 +967,20 @@ textarea.without-line-numbers {
   white-space: nowrap;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1150px) {
   .toolbar {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .toolbar.has-txt-download {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  #downloadText {
+    width: auto;
+    border-left: 0;
+    grid-column: auto;
+    justify-self: stretch;
   }
 
   #pasteText {

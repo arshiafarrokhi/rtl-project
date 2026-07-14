@@ -23,6 +23,10 @@ var themeToggle = document.getElementById("themeToggle");
 var themeIcon = document.getElementById("themeIcon");
 var themeText = document.getElementById("themeText");
 var toast = document.getElementById("toast");
+var actionToolbar = document.querySelector(".toolbar");
+var downloadTextButton = document.getElementById("downloadText");
+var pasteTextButton = document.getElementById("pasteText");
+var copyTextButton = document.getElementById("copyText");
 var SETTINGS_KEY = "fixtxt-settings-v3";
 var LEGACY_WORKSPACES_KEY = "fixtxt-workspaces-v2";
 var LEGACY_TABS_KEY = "fixtxt-tabs-v1";
@@ -50,6 +54,7 @@ var previewRedoHistory = new Map();
 var dirtyTabIds = new Set();
 var storageWarningShown = false;
 var initializationComplete = false;
+var rememberedPreviewSelection = null;
 
 function createWorkspace(mode) {
   var tab = createTab(1, mode);
@@ -752,6 +757,7 @@ function setEditorDirection(direction) {
 }
 
 function updateModeUI() {
+  var isRtl = activeMode === "rtl";
   var isJson = activeMode === "json";
   var isMarkdown = activeMode === "markdown";
   var isTree = isJson && jsonView === "tree";
@@ -780,6 +786,8 @@ function updateModeUI() {
     "aria-pressed",
     isMarkdown ? "true" : "false",
   );
+  downloadTextButton.hidden = !isRtl;
+  actionToolbar.classList.toggle("has-txt-download", isRtl);
   editorViewSwitch.classList.toggle("is-visible", !isJson);
   jsonViewSwitch.classList.toggle("is-visible", isJson);
   markdownAlignSwitch.classList.toggle("is-visible", isMarkdown);
@@ -1326,6 +1334,42 @@ function getRawText() {
   return getActiveTab().text;
 }
 
+function getTxtFilename(tab) {
+  var basename = String(tab.title || "FixTxt")
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "");
+
+  if (!basename) {
+    basename = "FixTxt";
+  }
+
+  return /\.txt$/i.test(basename) ? basename : basename + ".txt";
+}
+
+function downloadCurrentRtlTab() {
+  if (activeMode !== "rtl") {
+    return;
+  }
+
+  writeActiveTabFromEditor(false);
+  var tab = getActiveTab("rtl");
+  var file = new Blob([tab.text], { type: "text/plain;charset=utf-8" });
+  var fileUrl = URL.createObjectURL(file);
+  var link = document.createElement("a");
+  link.href = fileUrl;
+  link.download = getTxtFilename(tab);
+  link.hidden = true;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(function () {
+    URL.revokeObjectURL(fileUrl);
+  }, 1000);
+  showToast("TXT downloaded.");
+}
+
 function copyRawText() {
   var text = getRawText();
   if (navigator.clipboard && window.isSecureContext) {
@@ -1674,12 +1718,64 @@ document.getElementById("clearAll").addEventListener("click", function () {
   saveNow();
 });
 
-document.getElementById("pasteText").addEventListener("click", function () {
+function capturePreviewSelection() {
+  if (!textarea.hidden || activeMode === "json") {
+    return null;
+  }
+
+  var viewer = activeMode === "markdown" ? markdownOutput : rtlRichViewer;
+  var state = getViewerSelectionState(viewer);
+  if (!state) {
+    return null;
+  }
+
+  return {
+    mode: activeMode,
+    rawEnd: state.rawEnd,
+    rawStart: state.rawStart,
+    source: textarea.value,
+    tabId: getActiveTab().id,
+  };
+}
+
+function rememberPreviewSelection() {
+  var selection = capturePreviewSelection();
+  if (selection) {
+    rememberedPreviewSelection = selection;
+  }
+}
+
+function getRememberedPasteRange(selection) {
+  if (
+    !selection ||
+    !textarea.hidden ||
+    activeMode !== selection.mode ||
+    getActiveTab().id !== selection.tabId ||
+    textarea.value !== selection.source
+  ) {
+    return null;
+  }
+
+  return {
+    end: selection.rawEnd,
+    start: selection.rawStart,
+  };
+}
+
+copyTextButton.addEventListener("pointerdown", rememberPreviewSelection);
+pasteTextButton.addEventListener("pointerdown", rememberPreviewSelection);
+downloadTextButton.addEventListener("click", downloadCurrentRtlTab);
+
+pasteTextButton.addEventListener("click", function () {
+  var previewSelection =
+    capturePreviewSelection() || rememberedPreviewSelection;
+  rememberedPreviewSelection = null;
+
   if (navigator.clipboard && navigator.clipboard.readText) {
     navigator.clipboard
       .readText()
       .then(function (text) {
-        insertRawText(text);
+        insertRawText(text, getRememberedPasteRange(previewSelection));
         if (activeMode !== "json") {
           showToast("Pasted raw text.");
         }
@@ -1694,7 +1790,7 @@ document.getElementById("pasteText").addEventListener("click", function () {
   showToast("Press Ctrl+V to paste here.");
 });
 
-document.getElementById("copyText").addEventListener("click", copyRawText);
+copyTextButton.addEventListener("click", copyRawText);
 addTabButton.addEventListener("click", addNewTab);
 
 textarea.addEventListener("input", function () {
