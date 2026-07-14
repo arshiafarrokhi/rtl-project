@@ -28,11 +28,12 @@ var LEGACY_WORKSPACES_KEY = "fixtxt-workspaces-v2";
 var LEGACY_TABS_KEY = "fixtxt-tabs-v1";
 var MAX_TABS = 5;
 var TREE_NODE_LIMIT = 1800;
+var RICH_PREVIEW_LIMIT = 180000;
 var activeMode = "rtl";
 var jsonView = "text";
 var markdownAlign = "right";
 var editorViews = {
-  rtl: "source",
+  rtl: "preview",
   markdown: "preview",
 };
 var workspaces = {
@@ -44,6 +45,8 @@ var renamingTabId = null;
 var saveTimer;
 var toastTimer;
 var lineNumberFrame;
+var previewUndoHistory = new Map();
+var previewRedoHistory = new Map();
 var dirtyTabIds = new Set();
 var storageWarningShown = false;
 var initializationComplete = false;
@@ -97,7 +100,7 @@ function normalizeMarkdownAlign(align) {
 }
 
 function normalizeEditorView(view) {
-  return view === "preview" ? "preview" : "source";
+  return view === "source" ? "source" : "preview";
 }
 
 function normalizeText(text) {
@@ -385,12 +388,8 @@ function loadStoredState() {
     activeMode = normalizeMode(stored.activeMode);
     jsonView = normalizeJsonView(stored.jsonView);
     markdownAlign = normalizeMarkdownAlign(stored.markdownAlign);
-    editorViews.rtl = normalizeEditorView(
-      stored.editorViews && stored.editorViews.rtl,
-    );
-    editorViews.markdown = normalizeEditorView(
-      stored.editorViews && stored.editorViews.markdown,
-    );
+    editorViews.rtl = "preview";
+    editorViews.markdown = "preview";
     workspaces.rtl = normalizeStoredWorkspace(stored.workspaces.rtl, "rtl");
     workspaces.json = normalizeStoredWorkspace(stored.workspaces.json, "json");
     workspaces.markdown = normalizeStoredWorkspace(
@@ -526,6 +525,18 @@ function renderInlineMarkdown(text) {
 
 function renderRtlPreview() {
   var text = textarea.value;
+  rtlRichViewer.classList.toggle(
+    "is-plain-preview",
+    text.length > RICH_PREVIEW_LIMIT,
+  );
+  if (!text) {
+    rtlRichViewer.innerHTML = "";
+    return;
+  }
+  if (text.length > RICH_PREVIEW_LIMIT) {
+    rtlRichViewer.textContent = text;
+    return;
+  }
   rtlRichViewer.innerHTML = text
     .split("\n")
     .map(function (line) {
@@ -721,9 +732,17 @@ function renderMarkdownViewer() {
   markdownOutput.dir = isLeft ? "ltr" : "rtl";
   markdownOutput.classList.toggle("is-align-left", isLeft);
   markdownOutput.classList.toggle("is-align-right", !isLeft);
-  markdownOutput.innerHTML = textarea.value.trim()
-    ? renderMarkdownDocument(textarea.value)
-    : '<div class="markdown-empty">Paste Markdown to preview it here.</div>';
+  markdownOutput.classList.toggle(
+    "is-plain-preview",
+    textarea.value.length > RICH_PREVIEW_LIMIT,
+  );
+  if (textarea.value.length > RICH_PREVIEW_LIMIT) {
+    markdownOutput.textContent = textarea.value;
+  } else {
+    markdownOutput.innerHTML = textarea.value.trim()
+      ? renderMarkdownDocument(textarea.value)
+      : "";
+  }
 }
 
 function setEditorDirection(direction) {
@@ -807,6 +826,7 @@ function updateModeUI() {
     isMarkdown && markdownAlign === "left" ? "true" : "false",
   );
   textarea.classList.toggle("is-json-viewer", isJson);
+  lineNumbers.classList.toggle("is-json", isJson);
 
   if (isJson) {
     setEditorDirection("ltr");
@@ -1033,6 +1053,12 @@ function loadActiveTab(focusEditor) {
   }
 }
 
+function preferPreviewForCurrentMode() {
+  if (activeMode !== "json") {
+    editorViews[activeMode] = "preview";
+  }
+}
+
 function addNewTab() {
   var workspace = getWorkspace();
   if (workspace.tabs.length >= MAX_TABS) {
@@ -1050,7 +1076,7 @@ function addNewTab() {
   if (activeMode === "json") {
     jsonView = "text";
   } else {
-    editorViews[activeMode] = "source";
+    preferPreviewForCurrentMode();
   }
   markTabDirty(newTab.id);
   renumberTabs(activeMode);
@@ -1071,6 +1097,8 @@ function closeTab(tabId) {
   var closingActive = tabId === workspace.activeTabId;
   workspace.tabs.splice(index, 1);
   dirtyTabIds.delete(tabId);
+  previewUndoHistory.delete(tabId);
+  previewRedoHistory.delete(tabId);
   window.FixTxtStorage.deleteTabs([tabId]).catch(showStorageWarning);
   renumberTabs(activeMode);
   if (closingActive) {
@@ -1079,6 +1107,7 @@ function closeTab(tabId) {
   }
   renderTabs();
   if (closingActive) {
+    preferPreviewForCurrentMode();
     loadActiveTab(true);
   }
   saveNow();
@@ -1098,6 +1127,7 @@ function switchTab(tabId) {
   }
   writeActiveTabFromEditor(false);
   workspace.activeTabId = tabId;
+  preferPreviewForCurrentMode();
   renderTabs();
   loadActiveTab(true);
   saveNow();
@@ -1152,6 +1182,7 @@ function switchMode(mode) {
   }
   writeActiveTabFromEditor(false);
   activeMode = mode;
+  preferPreviewForCurrentMode();
   renamingTabId = null;
   renderTabs();
   loadActiveTab(true);
@@ -1174,6 +1205,13 @@ function setEditorView(view) {
   }
   writeActiveTabFromEditor(false);
   editorViews[activeMode] = normalizeEditorView(view);
+  if (editorViews[activeMode] === "source") {
+    var activeTab = getActiveTab();
+    if (activeTab) {
+      previewUndoHistory.delete(activeTab.id);
+      previewRedoHistory.delete(activeTab.id);
+    }
+  }
   renderCurrentView();
   saveNow();
   focusVisibleEditor();
@@ -1235,20 +1273,23 @@ function scheduleJsonFormat(showInvalidToast) {
   }, 0);
 }
 
-function insertRawText(text) {
+function insertRawText(text, rawRange) {
   var raw = sanitizeIncomingText(text);
   if (!raw) {
     return;
   }
 
+  var keepPreviewVisible = textarea.hidden && activeMode !== "json";
+
   if (textarea.hidden) {
     if (activeMode === "json") {
       jsonView = "text";
+      renderCurrentView();
+    } else if (rawRange) {
+      textarea.setSelectionRange(rawRange.start, rawRange.end);
     } else {
-      editorViews[activeMode] = "source";
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     }
-    renderCurrentView();
-    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }
 
   var start =
@@ -1267,10 +1308,16 @@ function insertRawText(text) {
   } else {
     queueSave();
   }
-  try {
-    textarea.focus({ preventScroll: true });
-  } catch (error) {
-    textarea.focus();
+
+  if (keepPreviewVisible) {
+    renderCurrentView();
+    focusVisibleEditor();
+  } else {
+    try {
+      textarea.focus({ preventScroll: true });
+    } catch (error) {
+      textarea.focus();
+    }
   }
 }
 
@@ -1540,6 +1587,7 @@ function applyText(value, direction) {
   textarea.value = sanitizeText(value);
   setEditorDirection(direction);
   writeActiveTabFromEditor(false);
+  preferPreviewForCurrentMode();
   renderCurrentView();
   saveNow();
   focusEditorAtStart();
@@ -1621,6 +1669,7 @@ document.getElementById("fixLtr").addEventListener("click", function () {
 document.getElementById("clearAll").addEventListener("click", function () {
   textarea.value = "";
   writeActiveTabFromEditor(false);
+  preferPreviewForCurrentMode();
   renderCurrentView();
   saveNow();
 });
@@ -1678,90 +1727,341 @@ function selectViewerContents(viewer) {
   selection.addRange(range);
 }
 
-function viewerContentsAreSelected(viewer) {
+function mapVisibleTextToRaw(rawText, visibleText) {
+  var starts = new Array(visibleText.length);
+  var ends = new Array(visibleText.length);
+  var rawCursor = 0;
+
+  if (!visibleText) {
+    return { ends: ends, starts: starts };
+  }
+
+  for (var index = 0; index < visibleText.length; index += 1) {
+    var foundAt = rawText.indexOf(visibleText.charAt(index), rawCursor);
+    if (foundAt === -1) {
+      foundAt = rawCursor;
+    }
+    starts[index] = foundAt;
+    ends[index] = Math.min(foundAt + 1, rawText.length);
+    rawCursor = Math.min(foundAt + 1, rawText.length);
+  }
+
+  return { ends: ends, starts: starts };
+}
+
+function getViewerSelectionState(viewer) {
   var selection = window.getSelection();
   if (!selection || selection.rangeCount !== 1) {
-    return false;
+    return null;
   }
+
   var selectedRange = selection.getRangeAt(0);
-  var fullRange = document.createRange();
-  fullRange.selectNodeContents(viewer);
-  return (
-    selectedRange.compareBoundaryPoints(Range.START_TO_START, fullRange) ===
-      0 &&
-    selectedRange.compareBoundaryPoints(Range.END_TO_END, fullRange) === 0
-  );
-}
+  if (
+    !viewer.contains(selectedRange.startContainer) ||
+    !viewer.contains(selectedRange.endContainer)
+  ) {
+    return null;
+  }
 
-function previousCodePointStart(text, end) {
-  var previous = Array.from(text.slice(0, end)).pop();
-  return previous ? end - previous.length : end;
-}
+  var visibleText = viewer.textContent || "";
+  var startProbe = document.createRange();
+  var endProbe = document.createRange();
+  startProbe.selectNodeContents(viewer);
+  endProbe.selectNodeContents(viewer);
+  startProbe.setEnd(selectedRange.startContainer, selectedRange.startOffset);
+  endProbe.setEnd(selectedRange.endContainer, selectedRange.endOffset);
 
-function switchVisibleViewerToSource() {
-  if (activeMode === "json") {
-    setJsonView("text");
+  var visibleStart = Math.min(startProbe.toString().length, visibleText.length);
+  var visibleEnd = Math.min(endProbe.toString().length, visibleText.length);
+  var rawMap = mapVisibleTextToRaw(textarea.value, visibleText);
+  var rawStart;
+  var rawEnd;
+
+  if (visibleStart === visibleEnd) {
+    var insertionPoint =
+      visibleStart > 0
+        ? rawMap.ends[visibleStart - 1]
+        : rawMap.starts[0] == null
+          ? textarea.value.length
+          : rawMap.starts[0];
+    rawStart = insertionPoint;
+    rawEnd = insertionPoint;
   } else {
-    setEditorView("source");
+    rawStart = rawMap.starts[visibleStart];
+    rawEnd = rawMap.ends[visibleEnd - 1];
+  }
+
+  if (visibleStart === 0 && visibleEnd === visibleText.length) {
+    rawStart = 0;
+    rawEnd = textarea.value.length;
+  }
+
+  return {
+    rawEnds: rawMap.ends,
+    rawEnd: Math.max(rawStart, rawEnd),
+    rawStart: Math.min(rawStart, rawEnd),
+    rawStarts: rawMap.starts,
+    visibleEnd: Math.max(visibleStart, visibleEnd),
+    visibleStart: Math.min(visibleStart, visibleEnd),
+    visibleText: visibleText,
+  };
+}
+
+function setViewerCaret(viewer, offset) {
+  var selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+
+  var remaining = Math.max(0, offset);
+  var walker = document.createTreeWalker(viewer, NodeFilter.SHOW_TEXT);
+  var node = walker.nextNode();
+  while (node) {
+    if (remaining <= node.nodeValue.length) {
+      var range = document.createRange();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+    remaining -= node.nodeValue.length;
+    node = walker.nextNode();
   }
 }
 
-function handleViewerKeydown(event) {
+function getPreviewHistoryStack(history, tabId) {
+  if (!history.has(tabId)) {
+    history.set(tabId, []);
+  }
+  return history.get(tabId);
+}
+
+function recordPreviewHistory(previousText) {
+  var tab = getActiveTab();
+  if (!tab) {
+    return;
+  }
+  var undoStack = getPreviewHistoryStack(previewUndoHistory, tab.id);
+  if (undoStack[undoStack.length - 1] !== previousText) {
+    undoStack.push(previousText);
+    if (undoStack.length > 100) {
+      undoStack.shift();
+    }
+  }
+  previewRedoHistory.set(tab.id, []);
+}
+
+function focusPreviewAfterRender(viewer, caretOffset) {
+  window.requestAnimationFrame(function () {
+    if (viewer.hidden) {
+      return;
+    }
+    try {
+      viewer.focus({ preventScroll: true });
+    } catch (error) {
+      viewer.focus();
+    }
+    setViewerCaret(viewer, caretOffset);
+  });
+}
+
+function commitPreviewEdit(viewer, rawStart, rawEnd, replacement, caretOffset) {
+  var valueLength = textarea.value.length;
+  var safeStart = Math.max(0, Math.min(rawStart, valueLength));
+  var safeEnd = Math.max(safeStart, Math.min(rawEnd, valueLength));
+  var previousText = textarea.value;
+  var nextText =
+    previousText.slice(0, safeStart) +
+    replacement +
+    previousText.slice(safeEnd);
+  if (nextText === previousText) {
+    focusPreviewAfterRender(viewer, caretOffset);
+    return;
+  }
+  recordPreviewHistory(previousText);
+  textarea.setRangeText(replacement, safeStart, safeEnd, "end");
+  writeActiveTabFromEditor(false);
+  renderCurrentView();
+  queueSave();
+  focusPreviewAfterRender(viewer, caretOffset);
+}
+
+function restorePreviewHistory(viewer, useRedo) {
+  var tab = getActiveTab();
+  if (!tab) {
+    return;
+  }
+  var sourceHistory = useRedo ? previewRedoHistory : previewUndoHistory;
+  var targetHistory = useRedo ? previewUndoHistory : previewRedoHistory;
+  var sourceStack = getPreviewHistoryStack(sourceHistory, tab.id);
+  if (!sourceStack.length) {
+    return;
+  }
+  var targetStack = getPreviewHistoryStack(targetHistory, tab.id);
+  targetStack.push(textarea.value);
+  textarea.value = sourceStack.pop();
+  writeActiveTabFromEditor(false);
+  renderCurrentView();
+  queueSave();
+  focusPreviewAfterRender(viewer, (viewer.textContent || "").length);
+}
+
+function getWordDeletionStart(text, offset) {
+  var index = offset;
+  while (index > 0 && /\s/.test(text.charAt(index - 1))) {
+    index -= 1;
+  }
+  while (index > 0 && !/\s/.test(text.charAt(index - 1))) {
+    index -= 1;
+  }
+  return index;
+}
+
+function getWordDeletionEnd(text, offset) {
+  var index = offset;
+  while (index < text.length && /\s/.test(text.charAt(index))) {
+    index += 1;
+  }
+  while (index < text.length && !/\s/.test(text.charAt(index))) {
+    index += 1;
+  }
+  return index;
+}
+
+function handlePreviewKeydown(event) {
   var commandKey = event.ctrlKey || event.metaKey;
+  if (commandKey && event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    restorePreviewHistory(event.currentTarget, event.shiftKey);
+    return;
+  }
+  if (commandKey && event.key.toLowerCase() === "y") {
+    event.preventDefault();
+    restorePreviewHistory(event.currentTarget, true);
+    return;
+  }
   if (commandKey && event.key.toLowerCase() === "a") {
     event.preventDefault();
     selectViewerContents(event.currentTarget);
-    return;
-  }
-
-  var insertedText = null;
-  if (!commandKey && !event.altKey && event.key.length === 1) {
-    insertedText = event.key;
-  } else if (event.key === "Enter") {
-    insertedText = "\n";
-  }
-
-  if (insertedText != null) {
-    event.preventDefault();
-    var shouldReplaceAll = viewerContentsAreSelected(event.currentTarget);
-    switchVisibleViewerToSource();
-    if (shouldReplaceAll) {
-      textarea.select();
-    } else {
-      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-    }
-    insertRawText(insertedText);
-    return;
-  }
-
-  if (event.key === "Backspace" || event.key === "Delete") {
-    event.preventDefault();
-    var shouldDeleteAll = viewerContentsAreSelected(event.currentTarget);
-    switchVisibleViewerToSource();
-    var end = textarea.value.length;
-    if (shouldDeleteAll) {
-      textarea.setRangeText("", 0, end, "end");
-      writeActiveTabFromEditor(true);
-    } else if (event.key === "Backspace" && end > 0) {
-      textarea.setRangeText(
-        "",
-        previousCodePointStart(textarea.value, end),
-        end,
-        "end",
-      );
-      writeActiveTabFromEditor(true);
-    } else {
-      textarea.setSelectionRange(end, end);
-    }
   }
 }
 
-function handleViewerPaste(event) {
+function handlePreviewBeforeInput(event) {
+  var viewer = event.currentTarget;
+  var state = getViewerSelectionState(viewer);
+  if (!state) {
+    event.preventDefault();
+    return;
+  }
+
+  var inputType = event.inputType || "";
+  var replacement = null;
+  var caretOffset = state.visibleStart;
+
+  if (
+    inputType === "insertText" ||
+    inputType === "insertCompositionText" ||
+    inputType === "insertReplacementText"
+  ) {
+    replacement = event.data || "";
+    caretOffset += replacement.length;
+  } else if (
+    inputType === "insertLineBreak" ||
+    inputType === "insertParagraph"
+  ) {
+    replacement = "\n";
+    caretOffset += 1;
+  }
+
+  if (replacement != null) {
+    event.preventDefault();
+    commitPreviewEdit(
+      viewer,
+      state.rawStart,
+      state.rawEnd,
+      replacement,
+      caretOffset,
+    );
+    return;
+  }
+
+  if (inputType.startsWith("delete")) {
+    event.preventDefault();
+    var rawStart = state.rawStart;
+    var rawEnd = state.rawEnd;
+    if (state.visibleStart === state.visibleEnd) {
+      if (inputType === "deleteContentBackward" && state.visibleStart > 0) {
+        caretOffset = state.visibleStart - 1;
+        rawStart = state.rawStarts[caretOffset];
+        rawEnd = state.rawEnds[caretOffset];
+      } else if (
+        inputType === "deleteContentForward" &&
+        state.visibleEnd < state.visibleText.length
+      ) {
+        rawStart = state.rawStarts[state.visibleStart];
+        rawEnd = state.rawEnds[state.visibleStart];
+      } else if (inputType === "deleteWordBackward" && state.visibleStart > 0) {
+        caretOffset = getWordDeletionStart(
+          state.visibleText,
+          state.visibleStart,
+        );
+        rawStart = state.rawStarts[caretOffset];
+        rawEnd = state.rawEnds[state.visibleStart - 1];
+      } else if (
+        inputType === "deleteWordForward" &&
+        state.visibleStart < state.visibleText.length
+      ) {
+        var wordEnd = getWordDeletionEnd(state.visibleText, state.visibleStart);
+        rawStart = state.rawStarts[state.visibleStart];
+        rawEnd = state.rawEnds[wordEnd - 1];
+      }
+    }
+    commitPreviewEdit(viewer, rawStart, rawEnd, "", caretOffset);
+    return;
+  }
+
+  event.preventDefault();
+}
+
+function handlePreviewPaste(event) {
   if (!event.clipboardData) {
     return;
   }
   event.preventDefault();
-  insertRawText(event.clipboardData.getData("text/plain"));
+  var viewer = event.currentTarget;
+  var state = getViewerSelectionState(viewer);
+  var text = sanitizeIncomingText(event.clipboardData.getData("text/plain"));
+  if (!text) {
+    return;
+  }
+  var rawStart = state ? state.rawStart : textarea.value.length;
+  var rawEnd = state ? state.rawEnd : textarea.value.length;
+  var caretOffset = (state ? state.visibleStart : 0) + text.length;
+  commitPreviewEdit(viewer, rawStart, rawEnd, text, caretOffset);
+}
+
+function handlePreviewCut(event) {
+  if (!event.clipboardData) {
+    return;
+  }
+  event.preventDefault();
+  var viewer = event.currentTarget;
+  var state = getViewerSelectionState(viewer);
+  if (!state || state.rawStart === state.rawEnd) {
+    return;
+  }
+  event.clipboardData.setData(
+    "text/plain",
+    textarea.value.slice(state.rawStart, state.rawEnd),
+  );
+  commitPreviewEdit(
+    viewer,
+    state.rawStart,
+    state.rawEnd,
+    "",
+    state.visibleStart,
+  );
 }
 
 function handleViewerCopy(event) {
@@ -1773,11 +2073,47 @@ function handleViewerCopy(event) {
   showToast("Copied raw text.");
 }
 
-[rtlRichViewer, markdownOutput, jsonTreeOutput].forEach(function (viewer) {
-  viewer.addEventListener("keydown", handleViewerKeydown);
-  viewer.addEventListener("paste", handleViewerPaste);
+[rtlRichViewer, markdownOutput].forEach(function (viewer) {
+  viewer.addEventListener("keydown", handlePreviewKeydown);
+  viewer.addEventListener("beforeinput", handlePreviewBeforeInput);
+  viewer.addEventListener("paste", handlePreviewPaste);
+  viewer.addEventListener("cut", handlePreviewCut);
   viewer.addEventListener("copy", handleViewerCopy);
 });
+
+jsonTreeOutput.addEventListener("keydown", function (event) {
+  var commandKey = event.ctrlKey || event.metaKey;
+  if (commandKey && event.key.toLowerCase() === "a") {
+    event.preventDefault();
+    selectViewerContents(jsonTreeOutput);
+    return;
+  }
+  if (
+    event.key === "Backspace" ||
+    event.key === "Delete" ||
+    event.key === "Enter" ||
+    (!commandKey && !event.altKey && event.key.length === 1)
+  ) {
+    event.preventDefault();
+  }
+});
+
+jsonTreeOutput.addEventListener("paste", function (event) {
+  if (!event.clipboardData) {
+    return;
+  }
+  event.preventDefault();
+  try {
+    textarea.value = formatJsonText(event.clipboardData.getData("text/plain"));
+    writeActiveTabFromEditor(false);
+    renderCurrentView();
+    saveNow();
+  } catch (error) {
+    showToast("Invalid JSON.");
+  }
+});
+
+jsonTreeOutput.addEventListener("copy", handleViewerCopy);
 
 themeToggle.addEventListener("click", function () {
   var currentTheme =

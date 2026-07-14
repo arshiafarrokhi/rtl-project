@@ -14,6 +14,8 @@ test("offline build opens from index.html and persists text", async ({
 
   await page.goto(buildUrl, { waitUntil: "load" });
   await expect(page.locator("body")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
+  await page.locator("#sourceView").click();
   await expect(page.locator("#textEditor")).toBeVisible();
 
   const rawText = "offline build persistence";
@@ -35,6 +37,7 @@ test("offline build opens from index.html and persists text", async ({
 
   await page.reload({ waitUntil: "load" });
   await expect(page.locator("body")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
   await expect(page.locator("#textEditor")).toHaveValue(rawText);
   expect(pageErrors).toEqual([]);
 });

@@ -3,6 +3,16 @@ const { test, expect } = require("@playwright/test");
 async function openCleanApp(page) {
   await page.goto("/");
   await expect(page.locator("body")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
+  await expect(page.locator("#previewView")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+}
+
+async function showSource(page) {
+  await page.locator("#sourceView").click();
+  await expect(page.locator("#textEditor")).toBeVisible();
 }
 
 async function dispatchPlainTextPaste(page, selector, text) {
@@ -27,6 +37,7 @@ test("native source editing keeps focus, caret, Backspace, and Ctrl+A", async ({
   await openCleanApp(page);
   const editor = page.locator("#textEditor");
 
+  await showSource(page);
   await editor.click();
   await page.keyboard.insertText("سلام test");
   await page.locator("#sourceView").click();
@@ -54,10 +65,11 @@ test("native source editing keeps focus, caret, Backspace, and Ctrl+A", async ({
   });
 });
 
-test("preview remains readable and keyboard editing moves explicitly to Source", async ({
+test("preview remains readable and active during keyboard edits", async ({
   page,
 }) => {
   await openCleanApp(page);
+  await showSource(page);
   const raw =
     "تغییرات در [index.html (line 1256)](D:/code/rtl-project/index.html:1256) انجام شد:";
   await page.locator("#textEditor").fill(raw);
@@ -77,12 +89,136 @@ test("preview remains readable and keyboard editing moves explicitly to Source",
   ).toBe(true);
 
   await page.keyboard.press("Backspace");
-  await expect(page.locator("#textEditor")).toBeVisible();
-  await expect(page.locator("#sourceView")).toHaveAttribute(
+  await expect(preview).toBeVisible();
+  await expect(page.locator("#previewView")).toHaveAttribute(
     "aria-pressed",
     "true",
   );
   await expect(page.locator("#textEditor")).toHaveValue("");
+
+  await page.keyboard.press("x");
+  await expect(preview).toContainText("x");
+  await expect(page.locator("#textEditor")).toHaveValue("x");
+  await expect(page.locator("#textEditor")).toBeHidden();
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(page.locator("#textEditor")).toHaveValue("");
+  await expect(preview).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(page.locator("#textEditor")).toHaveValue("x");
+  await expect(preview).toBeVisible();
+});
+
+test("Source is explicit and workflow boundaries return to Preview", async ({
+  page,
+}) => {
+  await openCleanApp(page);
+  await showSource(page);
+  await page.locator("#textEditor").fill("source session");
+  await page.waitForTimeout(450);
+
+  await page.reload();
+  await expect(page.locator("body")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
+  await expect(page.locator("#previewView")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator("#textEditor")).toHaveValue("source session");
+
+  await showSource(page);
+  await page.locator("#addTab").click();
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
+
+  await showSource(page);
+  await page.locator("#markdownViewer").click();
+  await expect(page.locator("#markdownOutput")).toBeVisible();
+  await showSource(page);
+  await page.locator("#rtlViewerMode").click();
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
+
+  await showSource(page);
+  await page.locator("#textEditor").fill("action text");
+  await page.locator("#fixRtl").click();
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
+  await showSource(page);
+  await page.locator("#clearAll").click();
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
+  await expect(page.locator("#textEditor")).toHaveValue("");
+
+  await page.locator("#jsonViewer").click();
+  await page.locator("#textEditor").fill('{"value":1}');
+  await page.locator("#jsonTreeView").click();
+  await page.locator("#jsonTreeOutput").focus();
+  await page.keyboard.press("Backspace");
+  await expect(page.locator("#jsonTreeOutput")).toBeVisible();
+  await dispatchPlainTextPaste(page, "#jsonTreeOutput", '{"next":2}');
+  await expect(page.locator("#jsonTreeOutput")).toBeVisible();
+  await expect(page.locator("#jsonTreeOutput")).toContainText("next");
+});
+
+test("Preview edits preserve Markdown source and stay in Preview", async ({
+  page,
+}) => {
+  await openCleanApp(page);
+  await showSource(page);
+  await page
+    .locator("#textEditor")
+    .fill("Read [file](D:/code/rtl-project/file.md:1) now");
+  await page.locator("#previewView").click();
+
+  const preview = page.locator("#rtlRichViewer");
+  const link = preview.locator(".rich-link");
+  await link.evaluate((element) => {
+    const viewer = element.closest("#rtlRichViewer");
+    viewer.focus();
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const textNode = walker.nextNode();
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, textNode.nodeValue.length);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+
+  for (const character of ["d", "o", "c"]) {
+    await page.keyboard.press(character);
+    await page.waitForTimeout(20);
+  }
+
+  await expect(page.locator("#textEditor")).toHaveValue(
+    "Read [doc](D:/code/rtl-project/file.md:1) now",
+  );
+  await expect(preview.locator(".rich-link")).toHaveText("doc");
+  await expect(preview).toBeVisible();
+
+  await page.locator("#markdownViewer").click();
+  await dispatchPlainTextPaste(
+    page,
+    "#markdownOutput",
+    "# Preview title\n\nPreview body",
+  );
+  await expect(page.locator("#markdownOutput h1")).toHaveText("Preview title");
+  await expect(page.locator("#markdownOutput")).toBeVisible();
+  await expect(page.locator("#textEditor")).toHaveValue(
+    "# Preview title\n\nPreview body",
+  );
+
+  const fontSizes = await page.evaluate(() => ({
+    preview: Number.parseFloat(getComputedStyle(rtlRichViewer).fontSize),
+    source: Number.parseFloat(getComputedStyle(textEditor).fontSize),
+  }));
+  expect(fontSizes.preview).toBeGreaterThanOrEqual(18);
+  expect(fontSizes.source).toBeGreaterThanOrEqual(18);
+
+  await page.locator("#jsonViewer").click();
+  const jsonFontSizes = await page.evaluate(() => ({
+    source: Number.parseFloat(getComputedStyle(textEditor).fontSize),
+    tree: Number.parseFloat(getComputedStyle(jsonTreeOutput).fontSize),
+  }));
+  expect(jsonFontSizes.source).toBeGreaterThanOrEqual(16);
+  expect(jsonFontSizes.tree).toBeGreaterThanOrEqual(15);
 });
 
 test("plain-text paste and preview copy preserve the complete raw source", async ({
@@ -91,10 +227,9 @@ test("plain-text paste and preview copy preserve the complete raw source", async
   await openCleanApp(page);
   const raw =
     "خط  اول  با فاصله\n[فایل](D:/code/rtl-project/index.html:1256)\n\u202BRTL\u202C";
-  await dispatchPlainTextPaste(page, "#textEditor", raw);
+  await dispatchPlainTextPaste(page, "#rtlRichViewer", raw);
   await expect(page.locator("#textEditor")).toHaveValue(raw);
-
-  await page.locator("#previewView").click();
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
   const copied = await page.locator("#rtlRichViewer").evaluate((element) => {
     const transfer = new DataTransfer();
     element.dispatchEvent(
@@ -113,6 +248,7 @@ test("RTL, JSON, and Markdown keep independent tabs and source text", async ({
   page,
 }) => {
   await openCleanApp(page);
+  await showSource(page);
   await page.locator("#textEditor").fill("RTL workspace");
 
   await page.locator("#jsonViewer").click();
@@ -142,6 +278,7 @@ test("tab text reloads from IndexedDB while localStorage stores metadata only", 
   page,
 }) => {
   await openCleanApp(page);
+  await showSource(page);
   const raw = "persistent raw text [link](D:/private/path.md:42)";
   await page.locator("#textEditor").fill(raw);
   await page.waitForTimeout(450);
@@ -156,6 +293,7 @@ test("tab text reloads from IndexedDB while localStorage stores metadata only", 
 
   await page.reload();
   await expect(page.locator("body")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator("#rtlRichViewer")).toBeVisible();
   await expect(page.locator("#textEditor")).toHaveValue(raw);
 });
 
@@ -246,17 +384,23 @@ test("long paste stays in the scrollable editor without scrolling the page", asy
 }) => {
   await openCleanApp(page);
   const longText = "متن بلند با raw spacing  1234567890\n".repeat(12_000);
-  const elapsed = await dispatchPlainTextPaste(page, "#textEditor", longText);
+  const elapsed = await dispatchPlainTextPaste(
+    page,
+    "#rtlRichViewer",
+    longText,
+  );
 
   expect(elapsed).toBeLessThan(3_000);
   await expect(page.locator("#textEditor")).toHaveValue(longText);
   const geometry = await page.evaluate(() => ({
     bodyScrollHeight: document.body.scrollHeight,
     bodyClientHeight: document.body.clientHeight,
-    editorScrollHeight: textEditor.scrollHeight,
-    editorClientHeight: textEditor.clientHeight,
-    editorOverflowY: getComputedStyle(textEditor).overflowY,
+    editorScrollHeight: rtlRichViewer.scrollHeight,
+    editorClientHeight: rtlRichViewer.clientHeight,
+    editorOverflowY: getComputedStyle(rtlRichViewer).overflowY,
+    previewVisible: !rtlRichViewer.hidden,
   }));
+  expect(geometry.previewVisible).toBe(true);
   expect(geometry.bodyScrollHeight).toBeLessThanOrEqual(
     geometry.bodyClientHeight,
   );

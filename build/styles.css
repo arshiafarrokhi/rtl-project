@@ -505,7 +505,7 @@ textarea,
   color: var(--text);
   background: var(--panel);
   caret-color: var(--accent);
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1.6;
   resize: none;
   overflow: auto;
@@ -529,8 +529,8 @@ textarea::placeholder {
 }
 
 textarea.is-json-viewer {
-  font-size: 15px;
-  line-height: 1.92;
+  font-size: 17px;
+  line-height: 1.7;
 }
 
 textarea.without-line-numbers {
@@ -550,12 +550,16 @@ textarea.without-line-numbers {
   background: var(--panel-strong);
   font-family: var(--mono);
   font-size: 13px;
-  line-height: 2.22;
+  line-height: 2.46;
   text-align: right;
   white-space: pre;
   overflow: hidden;
   pointer-events: none;
   user-select: none;
+}
+
+.line-numbers.is-json {
+  line-height: 2.22;
 }
 
 .rich-viewer,
@@ -569,10 +573,17 @@ textarea.without-line-numbers {
   text-align: right;
   white-space: pre-wrap;
   cursor: text;
+  line-height: 1.85;
   user-select: text;
 }
 
 .rich-viewer:empty::before {
+  color: var(--subtle);
+  content: attr(data-placeholder);
+  opacity: 0.8;
+}
+
+.markdown-viewer:empty::before {
   color: var(--subtle);
   content: attr(data-placeholder);
   opacity: 0.8;
@@ -583,12 +594,20 @@ textarea.without-line-numbers {
   text-align: left;
   white-space: normal;
   font-family: var(--mono);
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 16px;
+  line-height: 1.75;
 }
 
 .markdown-viewer {
   white-space: normal;
+  cursor: text;
+  line-height: 1.85;
+  user-select: text;
+}
+
+.rich-viewer.is-plain-preview,
+.markdown-viewer.is-plain-preview {
+  white-space: pre-wrap;
 }
 
 .markdown-viewer.is-align-right {
@@ -923,6 +942,11 @@ textarea.without-line-numbers {
   outline-offset: -3px;
 }
 
+.rich-viewer:focus-visible,
+.markdown-viewer:focus-visible {
+  outline: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1066,8 +1090,8 @@ textarea.without-line-numbers {
   .json-tree-view,
   .markdown-viewer {
     padding: 22px 24px 28px 60px;
-    font-size: 16px;
-    line-height: 1.8;
+    font-size: 18px;
+    line-height: 1.7;
   }
 
   textarea.without-line-numbers {
@@ -1084,7 +1108,15 @@ textarea.without-line-numbers {
     width: 44px;
     padding: 22px 9px 28px 0;
     font-size: 11px;
+    line-height: 2.78;
+  }
+
+  .line-numbers.is-json {
     line-height: 2.62;
+  }
+
+  .json-tree-view {
+    font-size: 16px;
   }
 
   .btn {
@@ -1194,7 +1226,8 @@ textarea.without-line-numbers {
     padding-right: 18px;
     padding-bottom: 22px;
     padding-left: 50px;
-    font-size: 15px;
+    font-size: 17px;
+    line-height: 1.7;
   }
 
   textarea.without-line-numbers {
@@ -1212,7 +1245,20 @@ textarea.without-line-numbers {
     padding-top: 18px;
     padding-right: 7px;
     font-size: 10px;
-    line-height: 2.7;
+    line-height: 2.89;
+  }
+
+  .line-numbers.is-json {
+    line-height: 2.88;
+  }
+
+  textarea.is-json-viewer {
+    font-size: 16px;
+    line-height: 1.8;
+  }
+
+  .json-tree-view {
+    font-size: 15px;
   }
 
   .theme-toggle {

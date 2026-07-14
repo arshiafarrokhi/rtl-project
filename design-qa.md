@@ -17,8 +17,17 @@
 - Desktop implementation: `artifacts/design-qa/desktop-final.png`
 - Mobile implementation: `artifacts/design-qa/mobile-final.png`
 - Combined reference comparison: `artifacts/design-qa/full-comparison-final.png`
-- Chrome behavior suite: 23 passed, 1 expected desktop skip.
+- Chrome behavior suite: 27 passed, 1 expected desktop skip.
 - Standalone `build/index.html`: verified by the automated offline persistence test.
+
+## Preview And Source Audit
+
+- Preview is the default for RTL and Markdown on launch, reload, tab changes, and mode changes.
+- Source opens only from its explicit segmented-control button.
+- Typing, selection replacement, Backspace, Delete, Paste, Cut, Undo, and Redo update the raw source while Preview remains visible.
+- Markdown links retain their raw destination while their visible label is edited.
+- Large previews use a plain-text rendering path to avoid blocking on very long input.
+- Editor typography was verified at desktop and mobile sizes for RTL, Markdown, JSON Source, and JSON Tree.
 
 ## Findings
 

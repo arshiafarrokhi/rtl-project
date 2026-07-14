@@ -113,18 +113,18 @@
               aria-label="Editor view"
             >
               <button
-                class="editor-view-button"
+                class="editor-view-button is-active"
                 type="button"
                 id="previewView"
-                aria-pressed="false"
+                aria-pressed="true"
               >
                 Preview
               </button>
               <button
-                class="editor-view-button is-active"
+                class="editor-view-button"
                 type="button"
                 id="sourceView"
-                aria-pressed="true"
+                aria-pressed="false"
               >
                 Source
               </button>
@@ -198,9 +198,12 @@
             class="rich-viewer"
             id="rtlRichViewer"
             dir="rtl"
-            role="region"
+            role="textbox"
             tabindex="0"
-            aria-label="Readable RTL preview"
+            contenteditable="plaintext-only"
+            spellcheck="false"
+            aria-multiline="true"
+            aria-label="Readable RTL preview editor"
             data-placeholder="Paste Persian, Arabic, Markdown, or mixed RTL/LTR text here..."
             hidden
           ></div>
@@ -217,9 +220,13 @@
             class="markdown-viewer is-align-right"
             id="markdownOutput"
             dir="rtl"
-            role="region"
+            role="textbox"
             tabindex="0"
-            aria-label="Markdown viewer"
+            contenteditable="plaintext-only"
+            spellcheck="false"
+            aria-multiline="true"
+            aria-label="Markdown preview editor"
+            data-placeholder="Paste Markdown here..."
             hidden
           ></div>
         </div>
