@@ -2,12 +2,15 @@
   "name": "fixtxt",
   "private": true,
   "scripts": {
-    "format": "prettier --write index.html styles.css theme-init.js storage.js app.js playwright.config.js tests/*.{js,mjs}",
-    "format:check": "prettier --check index.html styles.css theme-init.js storage.js app.js playwright.config.js tests/*.{js,mjs}",
-    "test": "playwright test",
+    "build": "node scripts/build.mjs",
+    "dev": "node tests/server.mjs --port 4173",
+    "format": "prettier --write index.html styles.css theme-init.js storage.js app.js playwright.config.js scripts/*.mjs tests/*.{js,mjs}",
+    "format:check": "prettier --check index.html styles.css theme-init.js storage.js app.js playwright.config.js scripts/*.mjs tests/*.{js,mjs}",
+    "test": "npm run build && playwright test",
     "test:headed": "playwright test --headed"
   },
   "devDependencies": {
+    "@phosphor-icons/web": "^2.1.2",
     "@playwright/test": "1.61.1",
     "prettier": "^3.9.5"
   }

@@ -4,12 +4,16 @@ import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const port = 4174;
+const portArgumentIndex = process.argv.indexOf("--port");
+const requestedPort =
+  portArgumentIndex >= 0 ? Number(process.argv[portArgumentIndex + 1]) : NaN;
+const port = Number.isInteger(requestedPort) ? requestedPort : 4174;
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".woff2": "font/woff2",
 };
 
 createServer(async (request, response) => {
